@@ -27,11 +27,11 @@ public:
   double Jy(int ix,int iy,bool UseNew,double Fy);
   double Fi(double Ux0,double Uy0,double Fx,double Fy,int i);
   double feq(double rho0,double Ux0,double Uy0,int i);
-  void Colisione(double gx,double gy);
-  void Adveccione(void);
-  void Inicie(double rho0,double Ux0,double Uy0);
-  void ImponerCampos(void);
-  void Imprimase(const char * NombreArchivo,double gx,double gy);
+  void Collision(double gx,double gy);
+  void Advection(void);
+  void Init(double rho0,double Ux0,double Uy0);
+  void ImposeFields(void);
+  void Print(const char * NombreArchivo,double gx,double gy);
 };
 LatticeBoltzmann::LatticeBoltzmann(void){
   //Cargar los pesos
@@ -74,7 +74,7 @@ double LatticeBoltzmann::Fi(double Ux0,double Uy0,double Fx,double Fy,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], FdotVi=Fx*V[0][i]+Fy*V[1][i], UdotF=Ux0*Fx+Uy0*Fy;
   return TresUmUsobre2tau*w[i]*(FdotVi-UdotF+3*UdotVi*FdotVi);
 }
-void LatticeBoltzmann::Colisione(double gx,double gy){
+void LatticeBoltzmann::Collision(double gx,double gy){
   int ix,iy,i; double rho0,Ux0,Uy0; double Fx,Fy;
   //Para cada celda
   for(ix=0;ix<Lx;ix++)
@@ -88,19 +88,19 @@ void LatticeBoltzmann::Colisione(double gx,double gy){
 	                +Fi(Ux0,Uy0,Fx,Fy,i);
     }
 }
-void LatticeBoltzmann::Adveccione(void){
+void LatticeBoltzmann::Advection(void){
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
       for(int i=0;i<Q;i++)
 	f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
 }
-void LatticeBoltzmann::Inicie(double rho0,double Ux0,double Uy0){
+void LatticeBoltzmann::Init(double rho0,double Ux0,double Uy0){
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
       for(int i=0;i<Q;i++)
 	f[ix][iy][i]=feq(rho0,Ux0,Uy0,i);
 }
-void LatticeBoltzmann::ImponerCampos(void){
+void LatticeBoltzmann::ImposeFields(void){
   int i,ix,iy; double rho0;
   for(ix=0;ix<Lx;ix++)
     for(iy=0;iy<Ly;iy++){
@@ -110,7 +110,7 @@ void LatticeBoltzmann::ImponerCampos(void){
 	for(i=0;i<Q;i++)  fnew[ix][iy][i]=feq(rho0,0,0,i);
     }
 }
-void LatticeBoltzmann::Imprimase(const char * NombreArchivo,double gx,double gy){
+void LatticeBoltzmann::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); double rho0,Ux0,Uy0; double Fx,Fy;
   int ix=0;
     for(int iy=0;iy<Ly;iy++){
@@ -128,15 +128,15 @@ int main(void){
   int t,tmax=100000;
   double RHOinicial=1.0, g=0.01;
   
-  Aire.Inicie(RHOinicial,0,0);
+  Aire.Init(RHOinicial,0,0);
   
   for(t=0;t<tmax;t++){
-    Aire.Colisione(g,0);
-    Aire.ImponerCampos();
-    Aire.Adveccione();
+    Aire.Collision(g,0);
+    Aire.ImposeFields();
+    Aire.Advection();
   }
   
-  Aire.Imprimase("Aire.dat",g,0);
+  Aire.Print("Aire.dat",g,0);
 
   return 0;
 }

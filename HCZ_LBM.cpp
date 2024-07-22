@@ -3,8 +3,8 @@
 #include <cmath>
 using namespace std;
 
-const int Lx=1;
-const int Ly=64;
+const int Lx=10;
+const int Ly=512;
 
 const int Q=9;
 
@@ -22,11 +22,11 @@ private:
   double f[Lx][Ly][Q], fnew[Lx][Ly][Q]; // f[ix][iy][i]
   double g[Lx][Ly][Q], gnew[Lx][Ly][Q]; // f[ix][iy][i]
   //Multiphase parameters
-  double kappa = 1.0;
-  double phi_l = 1.0, phi_h = 0.0;
-  double rho_l = 1.0, rho_h = 0.5;
+  double kappa = 5e-3;
+  double phi_l = 0.251, phi_h = 0.24;
+  double rho_l = 0.251, rho_h = 0.24;
   double a = 12*Cs2, b = 4.0;
-  double tau_l = 0.8, tau_h = 1.1;
+  double tau_l = 1.0, tau_h = 1.0;
   double nu_l = Cs2*(tau_l - 0.5);
   double nu_h = Cs2*(tau_h - 0.5);
 public:
@@ -62,7 +62,7 @@ public:
   //Automata main steps
   void Collision(double gx,double gy);
   void Advection(void);
-  void Init(double Ux0,double Uy0);
+  void Init(double Ux0,double Uy0,double gx,double gy);
   void ImposeFields(void);
   void Print(const char * NombreArchivo,double gx,double gy);
 };
@@ -92,7 +92,9 @@ double LB::Grad_x_phi(int ix, int iy, bool UseNew){
   int jx, jy;
   for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
+    if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
+    if(ix==0||ix==Lx-1) jx=ix;
     sum+=w[i]*V[0][i]*phi(jx,jy,UseNew);
   }
   return sum*U_Cs2;
@@ -102,7 +104,9 @@ double LB::Grad_y_phi(int ix, int iy, bool UseNew){
   int jx, jy;
   for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
+    if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
+    if(ix==0||ix==Lx-1) jx=ix;
     sum+=w[i]*V[1][i]*phi(jx,jy,UseNew);
   }
   return sum*U_Cs2;
@@ -112,7 +116,9 @@ double LB::Laplacian_phi(int ix, int iy, bool UseNew){
   int jx, jy;
   for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
+    if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
+    if(ix==0||ix==Lx-1) jx=ix;
     sum+=w[i]*(phi(jx,jy,UseNew)-phi(ix,iy,UseNew));
   }
   return sum*2*U_Cs2; 
@@ -122,7 +128,9 @@ double LB::Fsx(int ix, int iy, bool UseNew){
   int jx, jy;
   for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
+    if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
+    if(ix==0||ix==Lx-1) jx=ix;
     sum+=w[i]*V[0][i]*Laplacian_phi(jx,jy,UseNew);
   } 
   return kappa*phi(ix,iy,UseNew)*sum;
@@ -132,7 +140,9 @@ double LB::Fsy(int ix, int iy, bool UseNew){
   int jx, jy;
   for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
+    if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
+    if(ix==0||ix==Lx-1) jx=ix;
     sum+=w[i]*V[1][i]*Laplacian_phi(jx,jy,UseNew);
   }
   return kappa*phi(ix,iy,UseNew)*sum;
@@ -149,13 +159,13 @@ double LB::tau(double phi){
 double LB::Jx(double Fsx, double Fx, int ix,int iy,bool UseNew){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
-    if(UseNew) suma+=fnew[ix][iy][i]*V[0][i]; else suma+=f[ix][iy][i]*V[0][i];
+    if(UseNew) suma+=gnew[ix][iy][i]*V[0][i]; else suma+=g[ix][iy][i]*V[0][i];
   return suma+0.5*Cs2*(Fsx+Fx);
 }
 double LB::Jy(double Fsy, double Fy, int ix,int iy,bool UseNew){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
-    if(UseNew) suma+=fnew[ix][iy][i]*V[1][i]; else suma+=f[ix][iy][i]*V[1][i];
+    if(UseNew) suma+=gnew[ix][iy][i]*V[1][i]; else suma+=g[ix][iy][i]*V[1][i];
   return suma+0.5*Cs2*(Fsy+Fy);
 }
 double LB::p_th(double phi){
@@ -230,55 +240,83 @@ void LB::Collision(double gx,double gy){
     for(iy=0;iy<Ly;iy++){
       //Compute macroscopic fields
       phi0=phi(ix,iy,false); gr_x0=Grad_Psi_x(phi0,ix,iy,false); gr_y0=Grad_Psi_y(phi0,ix,iy,false);
-      rho0=rho(phi0);  nu0=nu(phi0);  tau0=tau(phi0); rhoRT = rho0*Cs2; UmUtau=1.0-1.0/tau0; Utau=1.0/tau0;
+      rho0=rho(phi0); tau0=tau(phi0);  nu0=nu(phi0); rhoRT = rho0*Cs2; UmUtau=1.0-1.0/tau0; Utau=1.0/tau0;
       Fsx0=Fsx(ix,iy,false); Fsy0=Fsy(ix,iy,false); Fx=gx*rho0; Fy=gy*rho0;
       Ux0=Jx(Fsx0,Fx,ix,iy,false)/rhoRT;  Uy0=Jy(Fsy0,Fy,ix,iy,false)/rhoRT;
       p0=p(phi0,rho0,gr_x0,gr_y0,Ux0,Uy0,ix,iy,false);
       for(i=0;i<Q;i++){
-    	  fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(Ux0,Uy0,phi0,i)+Fi(tau0,Ux0,Uy0,gr_x0,gr_y0,i);
+    	  fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(Ux0,Uy0,phi0,i)-Fi(tau0,Ux0,Uy0,gr_x0,gr_y0,i);
     	  gnew[ix][iy][i]=UmUtau*g[ix][iy][i]+Utau*geq(p0,rho0,Ux0,Uy0,i)+Gi(tau0,Ux0,Uy0,gr_x0,gr_y0,Fsx0,Fsy0,Fx,Fy,i);
       }
     }
 }
 void LB::Advection(void){
+  double D = 1.0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
       for(int i=0;i<Q;i++){
 	      f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
 	      g[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=gnew[ix][iy][i];
+        //bounceback iy = 0
+        f[ix][0][1]=D*fnew[ix][0][3];g[ix][0][1]=D*gnew[ix][0][3];
+        f[ix][0][2]=D*fnew[ix][0][4];g[ix][0][2]=D*gnew[ix][0][4];
+        f[ix][0][3]=D*fnew[ix][0][1];g[ix][0][3]=D*gnew[ix][0][1];
+        f[ix][0][4]=D*fnew[ix][0][2];g[ix][0][4]=D*gnew[ix][0][2];
+        f[ix][0][5]=D*fnew[ix][0][7];g[ix][0][5]=D*gnew[ix][0][7];
+        f[ix][0][6]=D*fnew[ix][0][8];g[ix][0][6]=D*gnew[ix][0][8];
+        f[ix][0][7]=D*fnew[ix][0][5];g[ix][0][7]=D*gnew[ix][0][5];
+        f[ix][0][8]=D*fnew[ix][0][6];g[ix][0][8]=D*gnew[ix][0][6];
+        //bounceback iy = Ly-1
+        f[ix][Ly-1][1]=D*fnew[ix][Ly-1][3];g[ix][Ly-1][1]=D*gnew[ix][Ly-1][3];
+        f[ix][Ly-1][2]=D*fnew[ix][Ly-1][4];g[ix][Ly-1][2]=D*gnew[ix][Ly-1][4];
+        f[ix][Ly-1][3]=D*fnew[ix][Ly-1][1];g[ix][Ly-1][3]=D*gnew[ix][Ly-1][1];
+        f[ix][Ly-1][4]=D*fnew[ix][Ly-1][2];g[ix][Ly-1][4]=D*gnew[ix][Ly-1][2];
+        f[ix][Ly-1][5]=D*fnew[ix][Ly-1][7];g[ix][Ly-1][5]=D*gnew[ix][Ly-1][7];
+        f[ix][Ly-1][6]=D*fnew[ix][Ly-1][8];g[ix][Ly-1][6]=D*gnew[ix][Ly-1][8];
+        f[ix][Ly-1][7]=D*fnew[ix][Ly-1][5];g[ix][Ly-1][7]=D*gnew[ix][Ly-1][5];
+        f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];g[ix][Ly-1][8]=D*gnew[ix][Ly-1][6];
       }
 }
-void LB::Init(double Ux0,double Uy0){
-  int W = 3; double phi0, rho0, p0;
+void LB::Init(double Ux0,double Uy0,double gx,double gy){
+  double W = 10.0; double phi0,rho0,p0,gr_x0,gr_y0;
+  //double Fsx0, Fsy0, Fx, Fy;
+  double rhoRT;//,Ux0,Uy0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
-      phi0 = (phi_l+phi_h)*0.5 + (phi_l-phi_h)*0.5*tanh(2*(ix-Lx/2)/W);
-      rho0 = (rho_l+rho_h)*0.5 + (rho_l-rho_h)*0.5*tanh(2*(ix-Lx/2)/W);
+      phi0 = (phi_l+phi_h)*0.5 + (phi_l-phi_h)*0.5*tanh(2*(double)(iy-Ly/2)/W);
+      rho0 = (rho_l+rho_h)*0.5 + (rho_l-rho_h)*0.5*tanh(2*(double)(iy-Ly/2)/W);
+      gr_x0=Grad_Psi_x(phi0,ix,iy,false); gr_y0=Grad_Psi_y(phi0,ix,iy,false);
+      //rhoRT = rho0*Cs2; Fsx0=Fsx(ix,iy,false); Fsy0=Fsy(ix,iy,false); Fx=gx*rho0; Fy=gy*rho0;
+      //Ux0=Jx(Fsx0,Fx,ix,iy,false)/rhoRT;  Uy0=Jy(Fsy0,Fy,ix,iy,false)/rhoRT;
+      p0=p(phi0,rho0,gr_x0,gr_y0,Ux0,Uy0,ix,iy,false);
       for(int i=0;i<Q;i++){
 	      f[ix][iy][i]=feq(Ux0,Uy0,phi0,i);
-	      g[ix][iy][i]=geq(0.0,rho0,Ux0,Uy0,i);
+	      g[ix][iy][i]=geq(p0,rho0,Ux0,Uy0,i);
         }
       }
 }
 void LB::ImposeFields(void){
-  int i,ix,iy; double phi0, rho0;
+  int i,ix,iy; double phi0,rho0,gr_x0,gr_y0;
   for(ix=0;ix<Lx;ix++)
     for(iy=0;iy<Ly;iy++){
-      phi0=phi(ix,iy,false);
-      //Walls
+      phi0=phi(ix,iy,false);  rho0=rho(phi0);
+      gr_x0=Grad_Psi_x(phi0,ix,iy,false); gr_y0=Grad_Psi_y(phi0,ix,iy,false);
       if(iy==0 || iy==Ly-1) 
 	for(i=0;i<Q;i++)  fnew[ix][iy][i]=feq(0,0,phi0,i);
     }
 }
 void LB::Print(const char * NombreArchivo,double gx,double gy){
-  ofstream MiArchivo(NombreArchivo); double phi0,rho0,rhoRT,Ux0; 
-  double Fsx, Fx;
+  ofstream MiArchivo(NombreArchivo); 
+  double phi0,rho0,rhoRT,Ux0,Uy0,gr_x0,gr_y0; 
+  double Fsx0, Fsy0, Fx, Fy,  p0, tau0;
   int ix=0;
     for(int iy=0;iy<Ly;iy++){
-      phi0=phi(ix,iy,true);  rho0=rho(phi0); rhoRT = rho0*Cs2;
-      //Fsx0=Fsx(ix,iy,true);  Fx=gx*rho0;
-      //Ux0=Jx(Fsx,Fx,ix,iy,true)/rhoRT;
-      MiArchivo<<iy<<" "<<rho0<<endl;
+      phi0=phi(ix,iy,true);  rho0=rho(phi0); rhoRT = rho0*Cs2;  tau0=tau(phi0);
+      gr_x0=Grad_Psi_x(phi0,ix,iy,true); gr_y0=Grad_Psi_y(phi0,ix,iy,true);
+      Fsx0=Fsx(ix,iy,true);  Fx=gx*rho0;  Fsy0=Fsy(ix,iy,true);  Fy=gy*rho0;
+      Ux0=Jx(Fsx0,Fx,ix,iy,true)/rhoRT;  Uy0=Jy(Fsy0,Fy,ix,iy,true)/rhoRT;
+      p0=p(phi0,rho0,gr_x0,gr_y0,Ux0,Uy0,ix,iy,true);
+      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<Grad_y_phi(ix,iy,true)<<"\t"<<Ux0<<endl;
     }
   MiArchivo.close();
 }
@@ -286,18 +324,18 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Aire;
-  int t,tmax=100;
-  double g=0.01;
+  int t,tmax=13;
+  double g=0;
   
-  Aire.Init(0,0);
+  Aire.Init(0,0,g,0);
   
   for(t=0;t<tmax;t++){
     Aire.Collision(g,0);
-    Aire.ImposeFields();
+    //Aire.ImposeFields();
     Aire.Advection();
   }
   
-  Aire.Print("Aire.dat",g,0);
+  Aire.Print("out2.dat",g,0);
 
   return 0;
 }

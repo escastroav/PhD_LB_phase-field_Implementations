@@ -4,7 +4,7 @@
 using namespace std;
 
 const int Lx=1;
-const int Ly=64;
+const int Ly=512;
 
 const int Q=9;
 
@@ -89,10 +89,30 @@ void LatticeBoltzmann::Collision(double gx,double gy){
     }
 }
 void LatticeBoltzmann::Advection(void){
+  double D = 1.0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
-      for(int i=0;i<Q;i++)
-	f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
+      for(int i=0;i<Q;i++){
+	      f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
+        //bounceback iy = 0
+       f[ix][0][1]=D*fnew[ix][0][3];
+       f[ix][0][2]=D*fnew[ix][0][4];
+       f[ix][0][3]=D*fnew[ix][0][1];
+       f[ix][0][4]=D*fnew[ix][0][2];
+       f[ix][0][5]=D*fnew[ix][0][7];
+       f[ix][0][6]=D*fnew[ix][0][8];
+       f[ix][0][7]=D*fnew[ix][0][5];
+       f[ix][0][8]=D*fnew[ix][0][6];
+       //bounceback iy = Ly-1
+       f[ix][Ly-1][1]=D*fnew[ix][Ly-1][3];
+       f[ix][Ly-1][2]=D*fnew[ix][Ly-1][4];
+       f[ix][Ly-1][3]=D*fnew[ix][Ly-1][1];
+       f[ix][Ly-1][4]=D*fnew[ix][Ly-1][2];
+       f[ix][Ly-1][5]=D*fnew[ix][Ly-1][7];
+       f[ix][Ly-1][6]=D*fnew[ix][Ly-1][8];
+       f[ix][Ly-1][7]=D*fnew[ix][Ly-1][5];
+       f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];
+      }
 }
 void LatticeBoltzmann::Init(double rho0,double Ux0,double Uy0){
   for(int ix=0;ix<Lx;ix++)
@@ -125,14 +145,14 @@ void LatticeBoltzmann::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LatticeBoltzmann Aire;
-  int t,tmax=100000;
-  double RHOinicial=1.0, g=0.01;
+  int t,tmax=11;
+  double RHOinicial=1.0, g=1e-8;
   
   Aire.Init(RHOinicial,0,0);
   
   for(t=0;t<tmax;t++){
     Aire.Collision(g,0);
-    Aire.ImposeFields();
+    //Aire.ImposeFields();
     Aire.Advection();
   }
   

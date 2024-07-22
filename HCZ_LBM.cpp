@@ -3,7 +3,7 @@
 #include <cmath>
 using namespace std;
 
-const int Lx=10;
+const int Lx=1;
 const int Ly=512;
 
 const int Q=9;
@@ -48,7 +48,7 @@ public:
   //EOS and Psi computations
   double p_th(double phi);  //EOS Carnahan-Starling
   double d_p_th_d_phi(double phi);
-  double Psi_phi(double phi, double p_th);
+  double Psi_phi(int ix, int iy, bool UseNew);
   double d_Psi_d_phi(double phi);
   double Grad_Psi_x(double dPs_dphi, int ix, int iy, bool UseNew);
   double Grad_Psi_y(double dPs_dphi, int ix, int iy, bool UseNew);
@@ -182,19 +182,37 @@ double LB::d_p_th_d_phi(double phi){
   double d_den=(1-phi_p)*(1-phi_p)*(1-phi_p)*(1-phi_p);
   return Cs2*d_num/den + num/d_den - 2*a*phi;
 }
-double LB::Psi_phi(double phi, double p_th){
-  return p_th - Cs2*phi;
+double LB::Psi_phi(int ix, int iy, bool UseNew){
+  return p_th(phi(ix,iy,UseNew)) - Cs2*phi(ix,iy,UseNew);
 }
 double LB::d_Psi_d_phi(double phi){
   return d_p_th_d_phi(phi) - Cs2;
 }
 double LB::Grad_Psi_x(double phi, int ix, int iy, bool UseNew)
 {
-  return d_Psi_d_phi(phi) * Grad_x_phi(ix,iy,UseNew);
+ int i; double sum;
+ int jx, jy;
+ for(sum=0,i=0;i<Q;i++){
+   jx=(Lx+ix+V[0][i])%Lx;
+   //if(ix==0||ix==Lx-1) jx=ix;
+   jy=(Ly+iy+V[1][i])%Ly;
+   //if(iy==0||iy==Ly-1) jy=iy;
+   sum+=w[i]*V[0][i]*Psi_phi(jx,jy,UseNew);
+ }
+ return sum*U_Cs2;
 }
 double LB::Grad_Psi_y(double phi, int ix, int iy, bool UseNew)
 {
-  return d_Psi_d_phi(phi) * Grad_y_phi(ix,iy,UseNew);
+ int i; double sum;
+ int jx, jy;
+ for(sum=0,i=0;i<Q;i++){
+   jx=(Lx+ix+V[0][i])%Lx;
+   //if(ix==0||ix==Lx-1) jx=ix;
+   jy=(Ly+iy+V[1][i])%Ly;
+   //if(iy==0||iy==Ly-1) jy=iy;
+   sum+=w[i]*V[1][i]*Psi_phi(jx,jy,UseNew);
+ }
+ return sum*U_Cs2;
 }
 double LB::p(double phi, double rho, double gr_x, double gr_y, double Ux0, double Uy0, int ix,int iy,bool UseNew){
   int i; double sum;
@@ -284,14 +302,13 @@ void LB::Advection(void){
       }
 }
 void LB::Init(double Ux0,double Uy0,double gx,double gy){
-  double W = 5.0; double phi0,rho0,p0,gr_x0,gr_y0;int iyp=0;
+  double W = 5.0; double phi0,rho0,p0,gr_x0,gr_y0;
   //double Fsx0, Fsy0, Fx, Fy;
   double rhoRT;//,Ux0,Uy0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
-      iyp = iy - Ly/2;
-      phi0 = (phi_l+phi_h)*0.5 + (phi_l-phi_h)*0.5*tanh(2*(double)(iyp*iyp-Ly*Ly/16)/W);
-      rho0 = (rho_l+rho_h)*0.5 + (rho_l-rho_h)*0.5*tanh(2*(double)(iyp*iyp-Ly*Ly/16)/W);
+      phi0 = phi_l+(phi_l-phi_h)*0.5*tanh(2*(double)(iy-Ly/4)/W)-(phi_l-phi_h)*0.5*tanh(2*(double)(iy-3*Ly/4)/W);
+      rho0 = rho_l+(rho_l-rho_h)*0.5*tanh(2*(double)(iy-Ly/4)/W)-(phi_l-phi_h)*0.5*tanh(2*(double)(iy-3*Ly/4)/W);
       if(iy==0){ gr_x0=Grad_Psi_x(phi(ix,1,false),ix,1,false);gr_y0=Grad_Psi_y(phi(ix,1,false),ix,1,false);}
       else if(iy==Ly-1){ gr_x0=Grad_Psi_x(phi(ix,Ly-2,false),ix,Ly-2,false);gr_y0=Grad_Psi_y(phi(ix,Ly-2,false),ix,Ly-2,false);}
       else {gr_x0=Grad_Psi_x(phi0,ix,iy,false); gr_y0=Grad_Psi_y(phi0,ix,iy,false);}
@@ -337,7 +354,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       else {gr_x0=Grad_Psi_x(phi0,ix,iy,false); gr_y0=Grad_Psi_y(phi0,ix,iy,false);};
       Ux0=Jx(Fsx0,Fx,ix,iy,true)/rhoRT;  Uy0=Jy(Fsy0,Fy,ix,iy,true)/rhoRT;
       p0=p(phi0,rho0,gr_x0,gr_y0,Ux0,Uy0,ix,iy,true);
-      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<gr_y0<<"\t"<<Ux0<<endl;
+      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<gr_y0<<"\t"<<p0<<endl;
     }
   MiArchivo.close();
 }
@@ -345,7 +362,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Aire;
-  int t,tmax=1;
+  int t,tmax=16;
   double g=0;
   
   Aire.Init(0,0,g,0);
@@ -356,7 +373,7 @@ int main(void){
     Aire.Advection();
   }
   
-  Aire.Print("out.dat",g,0);
+  Aire.Print("out2.dat",g,0);
 
   return 0;
 }

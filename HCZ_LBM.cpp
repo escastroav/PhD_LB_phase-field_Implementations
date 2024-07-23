@@ -3,8 +3,8 @@
 #include <cmath>
 using namespace std;
 
-const int Lx=10;
-const int Ly=512;
+const int Lx=1;
+const int Ly=128;
 
 const int Q=9;
 
@@ -20,7 +20,7 @@ private:
   //Multiphase parameters
   double kappa = 5e-4;
   double phi_l = 0.024, phi_h = 0.251;
-  double rho_l = 0.024, rho_h = 0.251;
+  double rho_l = 0.1, rho_h = 0.12;
   double a = 12*Cs2, b = 4.0;
   double tau_l = 1.9, tau_h = 1.9;
   double nu_l = Cs2*(tau_l - 0.5);
@@ -274,7 +274,7 @@ double LB::feq(double Ux0, double Uy0, double phi, int i){
 double LB::geq(double p, double rho, double Ux0, double Uy0, int i){
   double Gu=Gamma(Ux0,Uy0,i);
   double Gu_G0=Gamma(Ux0,Uy0,i)-Gamma(0,0,i);
-  return w[i]*p + rho * Gu_G0; 
+  return w[i]*p + rho * Gu_G0 * Cs2; // include RT!!!! 
 }
 void LB::Collision(double gx,double gy){
   int ix,iy,i; double phi0,gr_phi_x0,gr_phi_y0,gr_rho_x0,gr_rho_y0;
@@ -327,7 +327,7 @@ void LB::Advection(void){
       }
 }
 void LB::Init(double Ux0,double Uy0,double gx,double gy){
-  double W = 20.0; double phi0,rho0,p0,gr_x0,gr_y0;
+  double W = 10.0; double phi0,rho0,p0,gr_x0,gr_y0;
   //double Fsx0, Fsy0, Fx, Fy;
   double rhoRT;//,Ux0,Uy0;
   for(int ix=0;ix<Lx;ix++)
@@ -371,9 +371,9 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       Fsx0=Fsx(ix,iy,true); Fsy0=Fsy(ix,iy,true);
       Fx=gx*rho0; Fy=gy*rho0;
       gr_x0=Grad_Psi_phi_x(ix,iy,true); gr_y0=Grad_Psi_phi_y(ix,iy,true);
-      Ux0=Jx(Fsx0,Fx,ix,iy,true)/rhoRT;  Uy0=Jy(Fsy0,Fy,ix,iy,true)/rhoRT;
+      Ux0=Jx(Fsx0,Fx,ix,iy,true);  Uy0=Jy(Fsy0,Fy,ix,iy,true);
       p0=p(phi0,rho0,gr_x0,gr_y0,Ux0,Uy0,ix,iy,true);
-      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<Grad_y_phi(ix,iy,true)<<"\t"<<Uy0<<endl;
+      MiArchivo<<iy<<"\t"<<rho0<<"\t"<<phi0<<"\t"<<p0<<endl;
     }
   MiArchivo.close();
 }
@@ -381,7 +381,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Aire;
-  int t,tmax=20;
+  int t,tmax=1000;
   double g=0;
   
   Aire.Init(0,0,g,0);

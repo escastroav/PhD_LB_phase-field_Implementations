@@ -387,7 +387,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Aire;
-  int t,tmax=2000;
+  int t,tmax=4000;
   double g=-6.4e-5;
   
   Aire.Init(0,0,0,g);
@@ -398,7 +398,7 @@ int main(void){
     Aire.Advection();
   }
   
-  Aire.Print("rt.dat",0,g);
+  Aire.Print("rt_4000.dat",0,g);
 
   return 0;
 }

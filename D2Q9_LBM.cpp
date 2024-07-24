@@ -4,7 +4,7 @@
 using namespace std;
 
 const int Lx=1;
-const int Ly=512;
+const int Ly=64;
 
 const int Q=9;
 
@@ -15,13 +15,13 @@ const double U_Cs2 = 3.0;
 const double Cs2 = 1.0/U_Cs2;
 const double TresUmUsobre2tau=U_Cs2*(1-1.0/(2*tau));
 
-class LatticeBoltzmann{
+class LB{
 private:
   double w[Q];
   int V[2][Q]; // V[0][i]=V_ix,  V[1][i]=V_iy
   double f[Lx][Ly][Q], fnew[Lx][Ly][Q]; // f[ix][iy][i]
 public:
-  LatticeBoltzmann(void);
+  LB(void);
   double rho(int ix,int iy,bool UseNew);
   double Jx(int ix,int iy,bool UseNew,double Fx);
   double Jy(int ix,int iy,bool UseNew,double Fy);
@@ -33,7 +33,7 @@ public:
   void ImposeFields(void);
   void Print(const char * NombreArchivo,double gx,double gy);
 };
-LatticeBoltzmann::LatticeBoltzmann(void){
+LB::LB(void){
   //Cargar los pesos
   w[0]=4/9.0; 
   w[1]=w[2]=w[3]=w[4]=1/9.0;
@@ -48,33 +48,33 @@ LatticeBoltzmann::LatticeBoltzmann(void){
   V[0][5]=1;  V[0][6]=-1; V[0][7]=-1; V[0][8]=1;
   V[1][5]=1;  V[1][6]=1;  V[1][7]=-1; V[1][8]=-1;
 }
-double LatticeBoltzmann::rho(int ix,int iy,bool UseNew){
+double LB::rho(int ix,int iy,bool UseNew){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
     if(UseNew) suma+=fnew[ix][iy][i]; else suma+=f[ix][iy][i];
   return suma;
 }
-double LatticeBoltzmann::Jx(int ix,int iy,bool UseNew,double Fx){
+double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
     if(UseNew) suma+=fnew[ix][iy][i]*V[0][i]; else suma+=f[ix][iy][i]*V[0][i];
   return suma+0.5*Fx;
 }
-double LatticeBoltzmann::Jy(int ix,int iy,bool UseNew,double Fy){
+double LB::Jy(int ix,int iy,bool UseNew,double Fy){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
     if(UseNew) suma+=fnew[ix][iy][i]*V[1][i]; else suma+=f[ix][iy][i]*V[1][i];
   return suma+0.5*Fy;
 }
-double LatticeBoltzmann::feq(double rho0,double Ux0,double Uy0,int i){
+double LB::feq(double rho0,double Ux0,double Uy0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
   return rho0*w[i]*(1+U_Cs2*UdotVi+U_Cs2*U_Cs2*0.5*UdotVi*UdotVi-U_Cs2*0.5*U2);
 }
-double LatticeBoltzmann::Fi(double Ux0,double Uy0,double Fx,double Fy,int i){
+double LB::Fi(double Ux0,double Uy0,double Fx,double Fy,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], FdotVi=Fx*V[0][i]+Fy*V[1][i], UdotF=Ux0*Fx+Uy0*Fy;
   return TresUmUsobre2tau*w[i]*(FdotVi-UdotF+3*UdotVi*FdotVi);
 }
-void LatticeBoltzmann::Collision(double gx,double gy){
+void LB::Collision(double gx,double gy){
   int ix,iy,i; double rho0,Ux0,Uy0; double Fx,Fy;
   //Para cada celda
   for(ix=0;ix<Lx;ix++)
@@ -88,7 +88,7 @@ void LatticeBoltzmann::Collision(double gx,double gy){
 	                +Fi(Ux0,Uy0,Fx,Fy,i);
     }
 }
-void LatticeBoltzmann::Advection(void){
+void LB::Advection(void){
   double D = 1.0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
@@ -114,13 +114,13 @@ void LatticeBoltzmann::Advection(void){
        f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];
       }
 }
-void LatticeBoltzmann::Init(double rho0,double Ux0,double Uy0){
+void LB::Init(double rho0,double Ux0,double Uy0){
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++)
       for(int i=0;i<Q;i++)
 	f[ix][iy][i]=feq(rho0,Ux0,Uy0,i);
 }
-void LatticeBoltzmann::ImposeFields(void){
+void LB::ImposeFields(void){
   int i,ix,iy; double rho0;
   for(ix=0;ix<Lx;ix++)
     for(iy=0;iy<Ly;iy++){
@@ -130,7 +130,7 @@ void LatticeBoltzmann::ImposeFields(void){
 	for(i=0;i<Q;i++)  fnew[ix][iy][i]=feq(rho0,0,0,i);
     }
 }
-void LatticeBoltzmann::Print(const char * NombreArchivo,double gx,double gy){
+void LB::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); double rho0,Ux0,Uy0; double Fx,Fy;
   int ix=0;
     for(int iy=0;iy<Ly;iy++){
@@ -144,7 +144,7 @@ void LatticeBoltzmann::Print(const char * NombreArchivo,double gx,double gy){
 
 
 int main(void){
-  LatticeBoltzmann Aire;
+  LB Aire;
   int t,tmax=11;
   double RHOinicial=1.0, g=1e-8;
   

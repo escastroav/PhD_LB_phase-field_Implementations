@@ -8,7 +8,7 @@ const int Ly=100;
 
 const int Q=9;
 
-const double tau=1.2;
+const double tau=1.9;
 const double Utau=1.0/tau;
 const double UmUtau=1-Utau;
 const double U_Cs2 = 3.0;
@@ -20,7 +20,7 @@ private:
   double w[Q];
   int V[2][Q]; // V[0][i]=V_ix,  V[1][i]=V_iy
   double f[Lx][Ly][Q], fnew[Lx][Ly][Q]; // f[ix][iy][i]
-  double rho_g = 1.0, rho_l = 0.5;
+  double rho_g = 0.9, rho_l = 1.2;
   double rho_0 = rho_g;
 public:
   LB(void);
@@ -68,7 +68,7 @@ double LB::Psi_rho(double rho){
   return rho_0*(1.0 - exp(-rho/rho_0));
 }
 double LB::G(double rho_l,double rho_g){
-  return 2*(rho_g - rho_l)/(Psi_rho(rho_l) - Psi_rho(rho_g)); 
+  return -5.0999999999;//(rho_l==rho_g) ? -5.0 : 2*(rho_g - rho_l)/(Psi_rho(rho_l) - Psi_rho(rho_g)); 
 }
 double LB::FSCx(int ix,int iy, bool UseNew){
   int i; double sum;
@@ -124,6 +124,7 @@ void LB::Collision(double gx,double gy){
       Fgx0=gx*rho0; Fgy0=gy*rho0;
       Ux0=Jx(ix,iy,false,FSCx0,Fgx0)/rho0;  Uy0=Jy(ix,iy,false,FSCy0,Fgy0)/rho0;
       for(i=0;i<Q;i++)
+	      //fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(rho0,Ux0,Uy0,i)+Fi(Ux0,Uy0,FSCx0+Fgx0,FSCy0+Fgy0,i);
 	      fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(rho0,Ux0,Uy0,i)+Fi(Ux0,Uy0,Fgx0,Fgy0,i);
     }
 }
@@ -134,23 +135,23 @@ void LB::Advection(void){
       for(int i=0;i<Q;i++){
 	      f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
         //bounceback iy = 0
-       f[ix][0][1]=D*fnew[ix][0][3];
-       f[ix][0][2]=D*fnew[ix][0][4];
-       f[ix][0][3]=D*fnew[ix][0][1];
-       f[ix][0][4]=D*fnew[ix][0][2];
-       f[ix][0][5]=D*fnew[ix][0][7];
-       f[ix][0][6]=D*fnew[ix][0][8];
-       f[ix][0][7]=D*fnew[ix][0][5];
-       f[ix][0][8]=D*fnew[ix][0][6];
-       //bounceback iy = Ly-1
-       f[ix][Ly-1][1]=D*fnew[ix][Ly-1][3];
-       f[ix][Ly-1][2]=D*fnew[ix][Ly-1][4];
-       f[ix][Ly-1][3]=D*fnew[ix][Ly-1][1];
-       f[ix][Ly-1][4]=D*fnew[ix][Ly-1][2];
-       f[ix][Ly-1][5]=D*fnew[ix][Ly-1][7];
-       f[ix][Ly-1][6]=D*fnew[ix][Ly-1][8];
-       f[ix][Ly-1][7]=D*fnew[ix][Ly-1][5];
-       f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];
+      //f[ix][0][1]=D*fnew[ix][0][3];
+      //f[ix][0][2]=D*fnew[ix][0][4];
+      //f[ix][0][3]=D*fnew[ix][0][1];
+      //f[ix][0][4]=D*fnew[ix][0][2];
+      //f[ix][0][5]=D*fnew[ix][0][7];
+      //f[ix][0][6]=D*fnew[ix][0][8];
+      //f[ix][0][7]=D*fnew[ix][0][5];
+      //f[ix][0][8]=D*fnew[ix][0][6];
+      ////bounceback iy = Ly-1
+      //f[ix][Ly-1][1]=D*fnew[ix][Ly-1][3];
+      //f[ix][Ly-1][2]=D*fnew[ix][Ly-1][4];
+      //f[ix][Ly-1][3]=D*fnew[ix][Ly-1][1];
+      //f[ix][Ly-1][4]=D*fnew[ix][Ly-1][2];
+      //f[ix][Ly-1][5]=D*fnew[ix][Ly-1][7];
+      //f[ix][Ly-1][6]=D*fnew[ix][Ly-1][8];
+      //f[ix][Ly-1][7]=D*fnew[ix][Ly-1][5];
+      //f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];
       }
 }
 void LB::Init(double Ux0,double Uy0){
@@ -188,19 +189,19 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 
 int main(void){
-  LB Aire;
-  int t,tmax=50;
+  LB SC;
+  int t,tmax=100000;
   double g=0;
 
-  Aire.Init(0,0);
-  
+  SC.Init(0,0);
+  //cout<<SC.G(0.9,1.2)<<endl; 
   for(t=0;t<tmax;t++){
-    Aire.Collision(g,0);
-    //Aire.ImposeFields();
-    Aire.Advection();
+    SC.Collision(g,0);
+    //SC.ImposeFields();
+    SC.Advection();
   }
   
-  Aire.Print("out2tau.dat",g,0);
+  SC.Print("out2tau.dat",g,0);
 
   return 0;
 }

@@ -45,6 +45,9 @@ public:
   double dphi_dy(int ix, int iy, bool UseNew);
   double Laplacian_phi(int ix, int iy, bool UseNew);
   double norm_gr(double gr_x, double gr_y);
+  //Alternative derivative approach
+  double dphi_dx_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy,bool UseNew);
+  double dphi_dy_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy,bool UseNew);
   //Normal components
   double nx(double gr_x, double norm);
   double ny(double gr_y, double norm);
@@ -145,6 +148,28 @@ double LB::Laplacian_phi(int ix, int iy, bool UseNew){
 double LB::norm_gr(double gr_x, double gr_y){
   return (gr_x == 0 && gr_y == 0) ? 1 : sqrt(gr_x*gr_x + gr_y*gr_y);
 }
+double LB::dphi_dx_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy,bool UseNew){
+  double A = -Cs2*tau_phi, B = M*lmd;
+  int i; double Cx=0, Cy=0, norm_C;
+  for(i=0;i<Q;i++){
+    if(UseNew) Cx+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i]; else Cx+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i];
+    if(UseNew) Cy+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i]; else Cy+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i];
+  }
+  Cx+=0.5*dt_phiux; Cy+=0.5*dt_phiuy;
+  norm_C= (Cx==0&&Cy==0) ? 1 : sqrt(Cx*Cx+Cy*Cy);
+  return Cx/A + Cx*B/(A*norm_C); 
+}
+double LB::dphi_dy_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy, bool UseNew){
+  double A = -Cs2*tau_phi, B = M*lmd;
+  int i; double Cx=0, Cy=0, norm_C;
+  for(i=0;i<Q;i++){
+    if(UseNew) Cx+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i]; else Cx+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i];
+    if(UseNew) Cy+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i]; else Cy+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i];
+  }
+  Cx+=0.5*dt_phiux; Cy+=0.5*dt_phiuy;
+  norm_C= (Cx==0&&Cy==0) ? 1 : sqrt(Cx*Cx+Cy*Cy);
+  return Cy/A + Cy*B/(A*norm_C); 
+}
 double LB::nx(double gr_x, double norm){
   return gr_x / norm;
 }
@@ -186,8 +211,8 @@ double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,in
   int i; double suma;
   double UdotGr=Ux0*gr_x+Uy0*gr_y;
   double U2=Ux0*Ux0+Uy0*Uy0;
-  double cs2_UmW0 = Cs2 / (1.0 - w[0]);
-  for(suma=0,i=0;i<Q;i++)
+  double cs2_UmW0 = 0.6;//Cs2 / (1.0 - w[0]);
+  for(suma=0,i=1;i<Q;i++)
     if(UseNew) suma+=gnew[ix][iy][i]; else suma+=g[ix][iy][i];
   return cs2_UmW0*(suma+0.5*(rho_l-rho_g)*UdotGr-rho0*w[0]*U2*0.5*U_Cs2);
 }
@@ -228,6 +253,7 @@ void LB::Collision(double gx,double gy){
 	      fnew[ix][iy][i]=UmUtau_phi*f[ix][iy][i]+Utau_phi*feq(phi0,Ux0,Uy0,i)+Fi(nx0,ny0,dt_phiux0,dt_phiuy0,lmd0,i,tau_phi);
 	      gnew[ix][iy][i]=UmUtau*g[ix][iy][i]+Utau*geq(rho0,p0,Ux0,Uy0,i)+Gi(Ux0,Uy0,Fx,Fy,gr_x,gr_y,i,tau0);
       }
+      old_phiux[ix][iy]=phiux0; old_phiuy[ix][iy]=phiuy0;
     }
 }
 void LB::Advection(void){
@@ -295,7 +321,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
       Ux0=Jx(ix,iy,true,Fx)/rho0;  Uy0=Jy(ix,iy,true,Fy)/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
-      MiArchivo<<iy<<" "<<phi0<<" "<<Ux0<<" "<<tau0<<endl;
+      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<" "<<phi0*Ux0 - old_phiux[ix][iy]<<endl;
     }
   MiArchivo.close();
 }
@@ -303,12 +329,12 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   double W=5;
-  double rho_l=1, rho_g=1.0;  //rho_l liquid density; rho_g gas density;
+  double rho_l=1, rho_g=100;  //rho_l liquid density; rho_g gas density;
   double sigma=1.0e-3;             //surface tension
   double nu_l =0.1, nu_g =0.1;
-  double M=0.5;
+  double M=0.1;
   LB Liang(W,rho_l,rho_g,nu_l,nu_g,M,sigma);
-  int t,tmax=100;
+  int t,tmax=100000;
   double Uc=1e-4,g=Uc*(rho_l*nu_l+rho_g*nu_g)/(Ly*Ly);
   cout << g << endl; 
   Liang.Init(g,0);

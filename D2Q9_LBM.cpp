@@ -8,7 +8,7 @@ const int Ly=64;
 
 const int Q=9;
 
-const double tau=1.2;
+const double tau=0.8;
 const double Utau=1.0/tau;
 const double UmUtau=1-Utau;
 const double U_Cs2 = 3.0;
@@ -145,8 +145,8 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Aire;
-  int t,tmax=11;
-  double RHOinicial=1.0, g=1e-8;
+  int t,tmax=100000;
+  double RHOinicial=1.0, g=4e-9;
   
   Aire.Init(RHOinicial,0,0);
   

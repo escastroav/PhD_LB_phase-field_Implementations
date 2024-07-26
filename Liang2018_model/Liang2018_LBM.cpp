@@ -23,13 +23,13 @@ private:
   double sigma;           //surface tension
   double nu_l,nu_g;       //nu_l liquid viscosity; nu_g gas viscosity;
   double M;               //mobility
+  double tau_phi=M*U_Cs2+0.5;
   //Auxiliary parameters
-  double mu_l =nu_l*rho_l, mu_g =nu_g*rho_g;
-  double tau_l = U_Cs2*nu_l + 0.5;
-  double tau_g = U_Cs2*nu_g + 0.5;
-  double tau_phi = U_Cs2*M + 0.5;
-  double beta=12.0*sigma/W;
-  double k = 1.5*sigma*W;
+  double mu_l,  mu_g;
+  double tau_l;
+  double tau_g;
+  double beta;
+  double k;
   //cache variable phiu for dt
   double old_phiux[Lx][Ly];
   double old_phiuy[Lx][Ly];
@@ -151,24 +151,28 @@ double LB::norm_gr(double gr_x, double gr_y){
 double LB::dphi_dx_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy,bool UseNew){
   double A = -Cs2*tau_phi, B = M*lmd;
   int i; double Cx=0, Cy=0, norm_C;
+  double norm_grad_phi;
   for(i=0;i<Q;i++){
     if(UseNew) Cx+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i]; else Cx+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i];
     if(UseNew) Cy+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i]; else Cy+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i];
   }
   Cx+=0.5*dt_phiux; Cy+=0.5*dt_phiuy;
   norm_C= (Cx==0&&Cy==0) ? 1 : sqrt(Cx*Cx+Cy*Cy);
-  return Cx/A + Cx*B/(A*norm_C); 
+  norm_grad_phi=-(norm_C+B)/A;
+  return Cx/(A+B/norm_grad_phi); 
 }
 double LB::dphi_dy_local(double phi0,double Ux0,double Uy0,double lmd,double dt_phiux,double dt_phiuy,int ix,int iy, bool UseNew){
   double A = -Cs2*tau_phi, B = M*lmd;
   int i; double Cx=0, Cy=0, norm_C;
+  double norm_grad_phi;
   for(i=0;i<Q;i++){
     if(UseNew) Cx+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i]; else Cx+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[0][i];
     if(UseNew) Cy+=(fnew[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i]; else Cy+=(f[ix][iy][i]-feq(phi0,Ux0,Uy0,i))*V[1][i];
   }
   Cx+=0.5*dt_phiux; Cy+=0.5*dt_phiuy;
   norm_C= (Cx==0&&Cy==0) ? 1 : sqrt(Cx*Cx+Cy*Cy);
-  return Cy/A + Cy*B/(A*norm_C); 
+  norm_grad_phi=-(norm_C+B)/A;
+  return Cy/(A+B/norm_grad_phi); 
 }
 double LB::nx(double gr_x, double norm){
   return gr_x / norm;
@@ -312,16 +316,21 @@ void LB::ImposeFields(void){
 }
 void LB::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); 
-  double phi0,rho0,mu0,tau0,Ux0,Uy0,p0; double Fx,Fy,gr_x,gr_y;
+  double phi0,rho0,mu0,tau0,lmd0,Ux0,Uy0,p0; double Fx,Fy,gr_x,gr_y,gr_xloc,gr_yloc;
+  double dt_phiux,dt_phiuy;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
       phi0=phi(ix,iy,true);
       gr_x=dphi_dx(ix,iy,true);  gr_y=dphi_dy(ix,iy,true);
-      mu0=mu_phi(ix,iy,true);  rho0=rho(phi0);tau0=tau(phi0);
+      mu0=mu_phi(ix,iy,true);  rho0=rho(phi0);tau0=tau(phi0);lmd0=lambda(phi0);
       Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
       Ux0=Jx(ix,iy,true,Fx)/rho0;  Uy0=Jy(ix,iy,true,Fy)/rho0;
+      dt_phiux=phi0*Ux0 - old_phiux[ix][iy];
+      dt_phiuy=phi0*Uy0 - old_phiuy[ix][iy];
+      gr_xloc=dphi_dx_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
+      gr_yloc=dphi_dy_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
-      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<" "<<phi0*Ux0 - old_phiux[ix][iy]<<endl;
+      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<" "<<gr_y<<" "<<gr_yloc<<endl;
     }
   MiArchivo.close();
 }
@@ -329,13 +338,13 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   double W=5;
-  double rho_l=1, rho_g=100;  //rho_l liquid density; rho_g gas density;
+  double rho_l=100, rho_g=1;  //rho_l liquid density; rho_g gas density;
   double sigma=1.0e-3;             //surface tension
-  double nu_l =0.1, nu_g =0.1;
+  double nu_l =0.1, nu_g =0.01;
   double M=0.1;
   LB Liang(W,rho_l,rho_g,nu_l,nu_g,M,sigma);
   int t,tmax=100000;
-  double Uc=1e-4,g=Uc*(rho_l*nu_l+rho_g*nu_g)/(Ly*Ly);
+  double Uc=1e-4,g=4*Uc*(rho_l*nu_l+rho_g*nu_g)/(Ly*Ly);
   cout << g << endl; 
   Liang.Init(g,0);
   

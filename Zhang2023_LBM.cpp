@@ -18,36 +18,41 @@ private:
   double h[Lx][Ly][Q], hnew[Lx][Ly][Q]; // h[ix][iy][i] molar fraction
   double g1[Lx][Ly][Q], g1new[Lx][Ly][Q]; // g[ix][iy][i] component concentration
   double g2[Lx][Ly][Q], g2new[Lx][Ly][Q]; // g[ix][iy][i] component concentration
-  //Average densities
-  double rho1_bar;
+  //Average densities per component
+  double rho1_bar=1,rho2_bar=1;
+  double eta1_bar=6.7e-2,eta2_bar=6.7e-2;
   //Adjustable parameters
-  double W;               //interface thickness
-  double rho_l,rho_g;     //rho_l liquid density; rho_g gas density;
-  double sigma;           //surface tension
-  double nu_l,nu_g;       //nu_l liquid viscosity; nu_g gas viscosity;
-  double M;               //mobility
-  double tau_phi=M*U_Cs2+0.5;
-  //Auxiliary parameters
-  double mu_l,  mu_g;
-  double tau_l;
-  double tau_g;
-  double beta;
+  double W=4;                 //interface thickness
+  double sigma=2.5e-3;             //surface tension
+  double M_c=9.3e-2;
   //kappas
   double k_phi;
   double k_c1,k_c2;
+  double M_phi=M_c/(W*W);
+  double beta_phi=8*k_phi/(W*W);
+  double beta_c=0.1*beta_phi;
+  //Relaxation times
+  double tau_g1=(M_c*U_Cs2/nu1_bar)+0.5;
+  double tau_g2=(M_c*U_Cs2/nu2_bar)+0.5;
+  double tau_phi=M_phi*U_Cs2+0.5;
   //cache variable phiu for dt
+  double old_c1ux[Lx][Ly];
+  double old_c1uy[Lx][Ly];
+  double old_c2ux[Lx][Ly];
+  double old_c2uy[Lx][Ly];
   double old_phiux[Lx][Ly];
   double old_phiuy[Lx][Ly];
   double old_H[Lx][Ly];
 public:
-  LB(double W,double rho_l0,double rho_g0,double nu_l0,double nu_g0,double M0,double sigma0);
+  LB(void);
   //Scalar fields
   double phi(int ix,int iy,bool UseNew);
   double c1(int ix,int iy,bool UseNew);
   double c2(int ix,int iy,bool UseNew);
-  double lambda(double phi);
-  double rho(double c10, double c20);
-  double tau(double phi);
+  double rho(int ix, int iy, bool UseNew);
+  double eta(double c10,double c20);
+  double tau_f(double eta0,double rho0);
+  double tau_f(double eta0,double rho0);
   double mu_phi(int ix, int iy, bool UseNew);
   //Gradient components
   double dphi_dx(int ix, int iy, bool UseNew);
@@ -67,22 +72,19 @@ public:
   double mu_phi(int ix, int iy, bool UseNew);
   double mu_c1(int ix, int iy, bool UseNew);
   double mu_c2(int ix, int iy, bool UseNew);
-  //Normal components
-  double nx(double gr_x, double norm);
-  double ny(double gr_y, double norm);
   //Forces
   double Fsx_phi(double mu, double gr_x);
   double Fsy_phi(double mu, double gr_y);
   double Jx(int ix,int iy,bool UseNew,double Fx);
   double Jy(int ix,int iy,bool UseNew,double Fy);
-  double Fi(double tau,double Ux0,double Uy0,double gr_x,double gr_y,double Fsx,double Fsy,double Fx,double Fy,int i);
-  double Gi(double nx0,double ny0,double dt_phiux,double dt_phiuy,double lmd,int i,double tau0);
-  double Hi(double nx0,double ny0,double dt_phiux,double dt_phiuy,double H,double dH_dt,double lmd,int i,double tau0);
-  double p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew);
   double Gamma(double Ux0, double Uy0, int i);
+  double Fi(double tau,double Ux0,double Uy0,double gr_x,double gr_y,double Fx,double Fy,int i);
+  double Gi(double tau,double dt_cjux,double dt_cjuy,int i);
+  double Hi(double tau,double dt_phiux,double dt_phiuy,double H,double dH_dt,int i);
+  double p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew);
   double si(double Ux0, double Uy0, int i);
-  double feq(double p0,double rho0,double Ux0,double Uy0,int i);
-  double geq(double rho0,double p0,double Ux0,double Uy0,int i);
+  double feq(double Ux0,double Uy0,double p0,double rho0,int i);
+  double geq(double Ux0,double Uy0,double cj0,double nuj0,double muj0,int i);
   double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i);
   void Collision(double gx,double gy);
   void Advection(void);
@@ -90,22 +92,7 @@ public:
   void ImposeFields(void);
   void Print(const char * NombreArchivo,double gx,double gy);
 };
-LB::LB(double W0,double rho_l0,double rho_g0,double nu_l0,double nu_g0,double M0,double sigma0){
-  //Setting parameteres up
-  W=W0;                         //interface thickness
-  rho_l=rho_l0, rho_g=rho_g0;   //rho_l liquid density; rho_g gas density;
-  sigma=sigma0;                 //surface tension
-  nu_l =nu_l0, nu_g =nu_g0;     //nu_l liquid viscosity; nu_g gas viscosity;
-  M=M0;                         //Mobility
-  //Average densities
-  rho1_bar=1.0; rho2_bar=1.0;
-  //Auxiliary parameters
-  mu_l =nu_l*rho_l, mu_g =nu_g*rho_g;
-  tau_l = U_Cs2*nu_l + 0.5;
-  tau_g = U_Cs2*nu_g + 0.5;
-  beta=12.0*sigma/W;
-  //Kappas
-  k_phi = 1.5*sigma*W;
+LB::LB(void){
   //Cargar los pesos
   w[0]=4/9.0; 
   w[1]=w[2]=w[3]=w[4]=1/9.0;
@@ -141,11 +128,11 @@ double LB::c2(int ix,int iy,bool UseNew){
 double LB::rho(double c10,double c20){
   return rho1_bar*c10+rho2_bar*c20;
 }
-double LB::lambda(double phi){
-  return 4*phi*(1.0 - phi)/W; 
+double LB::tau_f(double eta0,double rho0){
+  return eta0*U_Cs2/rho0 + 0.5;
 }
-double LB::tau(double phi){
-  return phi*(tau_l - tau_g) + tau_g;
+double eta(double c10,double c20){
+  return exp(c10*log(eta1_bar)+c20*log(eta2_bar));  //Gij = 0 
 }
 double LB::dphi_dx(int ix, int iy, bool UseNew){
   int i; double sum;
@@ -308,23 +295,23 @@ double LB::Gamma(double Ux0,double Uy0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
   return w[i]*(1+U_Cs2*UdotVi+U_Cs2*U_Cs2*0.5*UdotVi*UdotVi-U_Cs2*0.5*U2);
 }
-double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double Fsx,double Fsy,double Fx,double Fy,int i){
+double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double Fx,double Fy,int i){
   double VU_x=(V[0][i]-Ux0),VU_y=(V[1][i]-Uy0);
   double Gu=Gamma(Ux0,Uy0,i);
   double Gu_G0=Gamma(Ux0,Uy0,i)-Gamma(0,0,i);
-  double VUdotFG=VU_x*(Fsx+Fx)+VU_y*(Fsy+Fy);
+  double VUdotFG=VU_x*Fx+VU_y*Fy;
   double VUdotGr=VU_x*gr_x + VU_y*gr_y;
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return UmU2tau*(VUdotFG*Gu-VUdotGr*Gu_G0);
 }
-double LB::Gi(double nx0,double ny0,double dt_phiux,double dt_phiuy,double lmd,int i,double tau0){
-  double DtdotVi=dt_phiux*V[0][i]+dt_phiuy*V[1][i];
-  double UmU2tau = 1.0 - 1.0/(2.0*tau0);
+double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i)
+  double DtdotVi=dt_cjux*V[0][i]+dt_cjuy*V[1][i];
+  double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return U_Cs2*UmU2tau*w[i]*DtdotVi;
 }
-double LB::Hi(double nx0,double ny0,double dt_phiux,double dt_phiuy,double H,double dH_dt,double lmd,int i,double tau0){
+double LB::Hi(double tau,double dt_phiux,double dt_phiuy,double H,double dH_dt,int i){
   double DtdotVi=dt_phiux*V[0][i]+dt_phiuy*V[1][i];
-  double UmU2tau = 1.0 - 1.0/(2.0*tau0);
+  double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return UmU2tau*w[i]*(U_Cs2*DtdotVi+H+0.5*dH_dt);
 }
 double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew){
@@ -334,16 +321,20 @@ double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,in
     if(UseNew) sum+=fnew[ix][iy][i]; else sum+=f[ix][iy][i];
   return sumr+0.5*Cs2*UdotGr;
 }
-double LB::feq(double phi0,double Ux0,double Uy0,int i){
+double LB::feq(double Ux0,double Uy0,double p0,double rho0,int i){
+  double Gu=Gamma(Ux0,Uy0,i);
+  double Gu_G0=Gamma(Ux0,Uy0,i)-Gamma(0,0,i);
+  return w[i]*p0+rho0*Gu_G0*Cs2;
+}
+double LB::geq(double Ux0,double Uy0,double cj0,double nuj0,double muj0,int i){
+  double UdotVi=Ux0*V[0][i]+Uy0*V[1][i];
+  double rho_siu=cj0*w[i]*U_Cs2*UdotVi;
+  if(i>0) return w[i]*muj0*nuj0+rho_siu;
+  else return nuj0*muj0*(w[i]-1.0)+cj0;
+}
+double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
   return phi0*w[i]*(1+U_Cs2*UdotVi);
-}
-double LB::geq(double rho0,double p0,double Ux0,double Uy0,int i){
-  double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
-  double rho_siu=rho0*w[i]*(U_Cs2*UdotVi+U_Cs2*U_Cs2*0.5*UdotVi*UdotVi-U_Cs2*0.5*U2);
-  if(i>0) return p0*w[i]*U_Cs2+rho_siu;
-  else return p0*(w[i]-1.0)*U_Cs2+rho_siu;
-
 }
 void LB::Collision(double gx,double gy){
   int ix,iy,i; 

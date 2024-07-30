@@ -35,9 +35,9 @@ private:
   double tau_g1=(M_c*U_Cs2/eta1_bar)+0.5;
   double tau_g2=(M_c*U_Cs2/eta2_bar)+0.5;
   double tau_h=(M_phi*k_phi*U_Cs2)+0.5;//B=0;
-  double Utaug1=1.0/tau_g1;  UmUtaug1=1.0-Utaug1;
-  double Utaug2=1.0/tau_g2;  UmUtaug2=1.0-Utaug2;
-  double Utauh=1.0/tau_h;  UmUtauh=1.0-Utauh;
+  double Utaug1=1.0/tau_g1,  UmUtaug1=1.0-Utaug1;
+  double Utaug2=1.0/tau_g2,  UmUtaug2=1.0-Utaug2;
+  double Utauh=1.0/tau_h,  UmUtauh=1.0-Utauh;
   //double tau_phi=M_phi*U_Cs2+0.5;
   //cache variable phiu for dt
   double old_c1ux[Lx][Ly];
@@ -53,9 +53,9 @@ public:
   double phi(int ix,int iy,bool UseNew);
   double c1(int ix,int iy,bool UseNew);
   double c2(int ix,int iy,bool UseNew);
-  double rho(int ix, int iy, bool UseNew);
+  double rho(double c10,double c20);
   double eta(double c10,double c20);
-  double tau_f(double eta0,double rho0);
+  double tau_phi(double eta0,double rho0);
   //Derivative components
   double drho_dx(int ix, int iy, bool UseNew);
   double drho_dy(int ix, int iy, bool UseNew);
@@ -71,7 +71,7 @@ public:
   double mu_phi(int ix, int iy, bool UseNew);
   double mu_c1(int ix, int iy, bool UseNew);
   double mu_c2(int ix, int iy, bool UseNew);
-  //Forces
+  //Forces and vector fields
   double Fsx(int ix, int iy, bool UseNew);
   double Fsy(int ix, int iy, bool UseNew);
   double Jx(int ix,int iy,bool UseNew,double Fx);
@@ -79,13 +79,17 @@ public:
   //Auxiliary fields
   double H(int ix, int iy, bool UseNew);
   double Gamma(double Ux0, double Uy0, int i);
+  //Forcing terms
   double Fi(double tau,double Ux0,double Uy0,double gr_x,double gr_y,double Fx,double Fy,int i);
   double Gi(double tau,double dt_cjux,double dt_cjuy,int i);
   double Hi(double dt_phiux,double dt_phiuy,double H,double dH_dt,int i);
+  //Pressure
   double p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew);
+  //Equilibrium functions
   double feq(double Ux0,double Uy0,double p0,double rho0,int i);
   double geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i);
   double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i);
+  //LB steps
   void Collision(double gx,double gy);
   void Advection(void);
   void Init(double Ux0,double Uy0);
@@ -107,6 +111,7 @@ LB::LB(void){
   V[0][5]=1;  V[0][6]=-1; V[0][7]=-1; V[0][8]=1;
   V[1][5]=1;  V[1][6]=1;  V[1][7]=-1; V[1][8]=-1;
 }
+//Scalar fields
 double LB::phi(int ix,int iy,bool UseNew){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
@@ -128,20 +133,21 @@ double LB::c2(int ix,int iy,bool UseNew){
 double LB::rho(double c10,double c20){
   return rho1_bar*c10+rho2_bar*c20;
 }
-double eta(double c10,double c20){
+double LB::eta(double c10,double c20){
   return exp(c10*log(eta1_bar)+c20*log(eta2_bar));//Gij = 0 
 }
-double LB::tau_f(double eta0,double rho0){
+double LB::tau_phi(double eta0,double rho0){
   return eta0*U_Cs2/rho0 + 0.5;
 }
+//Derivative components
 double LB::drho_dx(int ix, int iy, bool UseNew){
   int i; double sum_c1,sum_c2;
   int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
+  for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_c1+=w[i]*V[0][i]*c1(jx,jy,UseNew);
     sum_c2+=w[i]*V[0][i]*c2(jx,jy,UseNew);
   }
@@ -150,11 +156,11 @@ double LB::drho_dx(int ix, int iy, bool UseNew){
 double LB::drho_dy(int ix, int iy, bool UseNew){
   int i; double sum_c1,sum_c2;
   int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
+  for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_c1+=w[i]*V[1][i]*c1(jx,jy,UseNew);
     sum_c2+=w[i]*V[1][i]*c2(jx,jy,UseNew);
   }
@@ -167,7 +173,7 @@ double LB::Laplacian_phi(int ix, int iy, bool UseNew){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum+=w[i]*(phi(jx,jy,UseNew)-phi(ix,iy,UseNew));
   }
   return sum*2*U_Cs2;
@@ -179,7 +185,7 @@ double LB::Laplacian_c1(int ix, int iy, bool UseNew){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum+=w[i]*(c1(jx,jy,UseNew)-c1(ix,iy,UseNew));
   }
   return sum*2*U_Cs2;
@@ -191,11 +197,12 @@ double LB::Laplacian_c2(int ix, int iy, bool UseNew){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum+=w[i]*(c2(jx,jy,UseNew)-c2(ix,iy,UseNew));
   }
   return sum*2*U_Cs2;
 }
+//Free Energy
 double LB::f0(double phi0, double c10, double c20)
 {
   double W_phi = phi0*phi0*(1.0 - phi0*phi0);
@@ -206,10 +213,11 @@ double LB::df0_dphi(double phi0)
 {
   double dW_dphi = 2.0*phi0*(1.0 - 2.0*phi0*phi0);
   double omega_phi = 1e-3;
-  return omega_phi*dW_phi;
+  return omega_phi*dW_dphi;
 } 
 double LB::df0_dc1(double phi0, double c10, double c20){return 0.0;}  //Future implementation 
 double LB::df0_dc2(double phi0, double c10, double c20){return 0.0;}  //Future implementation
+//Chemical potentials
 double LB::mu_phi(int ix, int iy, bool UseNew){
   double phi0=phi(ix,iy,UseNew);
   return df0_dphi(phi0)-k_phi*Laplacian_phi(ix,iy,UseNew); 
@@ -220,6 +228,7 @@ double LB::mu_c1(int ix, int iy, bool UseNew){
 double LB::mu_c2(int ix, int iy, bool UseNew){
   return -k_c2*Laplacian_c2(ix,iy,UseNew); 
 }
+//Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
   int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
   int jx, jy;
@@ -227,7 +236,7 @@ double LB::Fsx(int ix, int iy, bool UseNew){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
     //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
@@ -241,7 +250,7 @@ double LB::Fsy(int ix, int iy, bool UseNew){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
     //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
@@ -251,15 +260,16 @@ double LB::Fsy(int ix, int iy, bool UseNew){
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
-    if(UseNew) suma+=gnew[ix][iy][i]*V[0][i]; else suma+=g[ix][iy][i]*V[0][i];
+    if(UseNew) suma+=fnew[ix][iy][i]*V[0][i]; else suma+=f[ix][iy][i]*V[0][i];
   return suma+0.5*Cs2*Fx;
 }
 double LB::Jy(int ix,int iy,bool UseNew,double Fy){
   int i; double suma;
   for(suma=0,i=0;i<Q;i++)
-    if(UseNew) suma+=gnew[ix][iy][i]*V[1][i]; else suma+=g[ix][iy][i]*V[1][i];
+    if(UseNew) suma+=fnew[ix][iy][i]*V[1][i]; else suma+=f[ix][iy][i]*V[1][i];
   return suma+0.5*Cs2*Fy;
 }
+//Auxiliary fields
 double LB::H(int ix,int iy,bool UseNew){
   double mu_phi0 = mu_phi(ix,iy,UseNew);
   double lapl_phi= Laplacian_phi(ix,iy,UseNew);
@@ -269,6 +279,7 @@ double LB::Gamma(double Ux0,double Uy0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
   return w[i]*(1+U_Cs2*UdotVi+U_Cs2*U_Cs2*0.5*UdotVi*UdotVi-U_Cs2*0.5*U2);
 }
+//Forcing terms
 double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double Fx,double Fy,int i){
   double VU_x=(V[0][i]-Ux0),VU_y=(V[1][i]-Uy0);
   double Gu=Gamma(Ux0,Uy0,i);
@@ -278,7 +289,7 @@ double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double F
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return UmU2tau*(VUdotFG*Gu-VUdotGr*Gu_G0);
 }
-double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i)
+double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i){
   double DtdotVi=dt_cjux*V[0][i]+dt_cjuy*V[1][i];
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return U_Cs2*UmU2tau*w[i]*DtdotVi;
@@ -288,13 +299,15 @@ double LB::Hi(double dt_phiux,double dt_phiuy,double H,double dH_dt,int i){
   double UmU2tau = 1.0 - 1.0/(2.0*tau_h);
   return UmU2tau*w[i]*(U_Cs2*DtdotVi+H+0.5*dH_dt);
 }
+//Pressure
 double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew){
   int i; double sum;
   double UdotGr = Ux0*gr_x + Uy0*gr_y;
   for(sum=0,i=0;i<Q;i++)
     if(UseNew) sum+=fnew[ix][iy][i]; else sum+=f[ix][iy][i];
-  return sumr+0.5*Cs2*UdotGr;
+  return sum+0.5*Cs2*UdotGr;
 }
+//Equilibrium functions
 double LB::feq(double Ux0,double Uy0,double p0,double rho0,int i){
   double Gu=Gamma(Ux0,Uy0,i);
   double Gu_G0=Gamma(Ux0,Uy0,i)-Gamma(0,0,i);
@@ -303,13 +316,14 @@ double LB::feq(double Ux0,double Uy0,double p0,double rho0,int i){
 double LB::geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i];
   double rho_siu=cj0*w[i]*U_Cs2*UdotVi;
-  if(i>0) return w[i]*muj0*etaj0+rho_siu;
-  else return etaj0*muj0*(w[i]-1.0)+cj0;
+  if(i>0) return w[i]*etaj0*muj0+rho_siu;
+  else return etaj0*muj0*(w[0]-1.0)+cj0;
 }
-double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
+double LB::heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
-  return phi0*w[i]*(1+U_Cs2*UdotVi);
+  return phi0*w[i]*(1+U_Cs2*UdotVi);//B=0
 }
+//LB steps
 void LB::Collision(double gx,double gy){
   int ix,iy,i; 
   double phi0,c10,c20,rho0,p0,eta0;
@@ -324,7 +338,7 @@ void LB::Collision(double gx,double gy){
   for(ix=0;ix<Lx;ix++)
     for(iy=0;iy<Ly;iy++){
       //Calcular las cantidades macroscopicas
-      phi0=phi(ix,iy,false);  c10=c1(ix,iy,false);  c20=c2(ix,iy,false);  rho0=rho(ix,iy,false);
+      phi0=phi(ix,iy,false);  c10=c1(ix,iy,false);  c20=c2(ix,iy,false);  rho0=rho(c10,c20);
       eta0=eta(c10,c20);  tau_phi0=tau_phi(eta0,rho0);  Utau=1.0/tau_phi0;  UmUtau=1.0-Utau;
       gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
       mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
@@ -369,7 +383,7 @@ void LB::Init(double Ux0,double Uy0){
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
       phi0 =0.5*tanh(2*(double)(iy-0.4*Ly)/W)-0.5*tanh(2*(double)(iy-0.6*Ly)/W);
-      c10 =(cg0-cl0)*phi0+cl0;  c20 =(cl0-cg0)*phi0+cg0;  rho0=c10*rho1_bar+c20*rho2_bar;
+      c10 =(cg0-cl0)*phi0+cl0;  c20 =(cl0-cg0)*phi0+cg0;  rho0=rho(c10,c20);
       gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
       mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
@@ -387,14 +401,17 @@ void LB::Init(double Ux0,double Uy0){
   }
 }
 void LB::ImposeFields(void){
+  double cl0=0.1,cg0=0.8188;
   int i,ix,iy; double phi0;
   for(ix=0;ix<Lx;ix++){
       //Walls
     	for(i=0;i<Q;i++){
-        fnew[ix][0][i]=feq(1,0,0,i);
-        fnew[ix][Ly-1][i]=feq(0,0,0,i);
-        gnew[ix][0][i]=geq(rho_l,p(0,0,0,0,rho_l,ix,0,false),0,0,i);
-        gnew[ix][Ly-1][i]=geq(rho_g,p(0,0,0,0,rho_g,ix,Ly-1,false),0,0,i);
+        fnew[ix][0][i]=feq(0,0,0,rho1_bar*cl0+rho2_bar*cg0,i);
+        fnew[ix][Ly-1][i]=feq(0,0,0,rho1_bar*cl0+rho2_bar*cg0,i);
+        g1new[ix][0][i]=geq(0,0,cl0,eta1_bar,0,i);
+        g1new[ix][Ly-1][i]=geq(0,0,cg0,eta1_bar,0,i);
+        g2new[ix][0][i]=geq(0,0,cg0,eta2_bar,0,i);
+        g2new[ix][Ly-1][i]=geq(0,0,cg0,eta2_bar,0,i);
       }
     }
 }
@@ -403,7 +420,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
   double phi0,c10,c20,rho0;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
-      phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=c2(ix,iy,true); rho0=rho(ix,iy,true);
+      phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=c2(ix,iy,true); rho0=rho(c10,c20);
       MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<c10<<" "<<c20<<endl;
     }
   MiArchivo.close();
@@ -411,7 +428,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 
 int main(void){
-  LB Liang();
+  LB Liang;
   int t,tmax=1;
   Liang.Init(0,0);
   
@@ -421,7 +438,7 @@ int main(void){
     Liang.Advection();
   }
   
-  Liang.Print("Zhang.dat",g,0);
+  Liang.Print("Zhang.dat",0,0);
 
   return 0;
 }

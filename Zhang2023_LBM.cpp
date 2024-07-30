@@ -382,7 +382,7 @@ void LB::Init(double Ux0,double Uy0){
   double gr_x, gr_y, mu_c10, mu_c20, p0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
-      phi0 =0.5*tanh(2*(double)(iy-0.4*Ly)/W)-0.5*tanh(2*(double)(iy-0.6*Ly)/W);
+      phi0 =0.5*tanh(2*(double)(iy-0.25*Ly)/W)-0.5*tanh(2*(double)(iy-0.75*Ly)/W);
       c10 =(cg0-cl0)*phi0+cl0;  c20 =(cl0-cg0)*phi0+cg0;  rho0=rho(c10,c20);
       gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
       mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
@@ -428,17 +428,17 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 
 int main(void){
-  LB Liang;
-  int t,tmax=1;
-  Liang.Init(0,0);
+  LB Zhang;
+  int t,tmax=100;
+  Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){
-    Liang.Collision(0,0);
-    //Liang.ImposeFields();
-    Liang.Advection();
+    Zhang.Collision(0,0);
+    //Zhang.ImposeFields();
+    Zhang.Advection();
   }
   
-  Liang.Print("Zhang.dat",0,0);
+  Zhang.Print("zhang.dat",0,0);
 
   return 0;
 }

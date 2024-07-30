@@ -4,7 +4,7 @@
 using namespace std;
 
 const int Lx=1;
-const int Ly=64;
+const int Ly=160;
 
 const int Q=9;
 const double U_Cs2 = 3.0;
@@ -90,7 +90,7 @@ public:
   double geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i);
   double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i);
   //LB steps
-  void Collision(double gx,double gy);
+  void Collision(int t,double gx,double gy);
   void Advection(void);
   void Init(double Ux0,double Uy0);
   void ImposeFields(void);
@@ -206,13 +206,13 @@ double LB::Laplacian_c2(int ix, int iy, bool UseNew){
 double LB::f0(double phi0, double c10, double c20)
 {
   double W_phi = phi0*phi0*(1.0 - phi0*phi0);
-  double omega_phi = 1e-3;
+  double omega_phi = sigma/W;
   return omega_phi*W_phi;
 } 
 double LB::df0_dphi(double phi0)
 {
   double dW_dphi = 2.0*phi0*(1.0 - 2.0*phi0*phi0);
-  double omega_phi = 1e-3;
+  double omega_phi = sigma/W;
   return omega_phi*dW_dphi;
 } 
 double LB::df0_dc1(double phi0, double c10, double c20){return 0.0;}  //Future implementation 
@@ -230,7 +230,7 @@ double LB::mu_c2(int ix, int iy, bool UseNew){
 }
 //Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
   int jx, jy;
   for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -239,12 +239,12 @@ double LB::Fsx(int ix, int iy, bool UseNew){
     //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Fsy(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
   int jx, jy;
   for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -253,9 +253,9 @@ double LB::Fsy(int ix, int iy, bool UseNew){
     //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
@@ -297,7 +297,7 @@ double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i){
 double LB::Hi(double dt_phiux,double dt_phiuy,double H,double dH_dt,int i){
   double DtdotVi=dt_phiux*V[0][i]+dt_phiuy*V[1][i];
   double UmU2tau = 1.0 - 1.0/(2.0*tau_h);
-  return UmU2tau*w[i]*(U_Cs2*DtdotVi+H+0.5*dH_dt);
+  return w[i]*(UmU2tau*U_Cs2*DtdotVi+H+0.5*dH_dt);
 }
 //Pressure
 double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew){
@@ -324,7 +324,7 @@ double LB::heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
   return phi0*w[i]*(1+U_Cs2*UdotVi);//B=0
 }
 //LB steps
-void LB::Collision(double gx,double gy){
+void LB::Collision(int t,double gx,double gy){
   int ix,iy,i; 
   double phi0,c10,c20,rho0,p0,eta0;
   double tau_phi0,Utau,UmUtau;
@@ -353,6 +353,7 @@ void LB::Collision(double gx,double gy){
       c2ux0=Ux0*c20; dt_c2ux0=c2ux0 - old_c2ux[ix][iy];
       c2uy0=Uy0*c20; dt_c2uy0=c2uy0 - old_c2uy[ix][iy];
       H0=H(ix,iy,false);  dH_dt=H0 - old_H[ix][iy];
+      //if(t==399)cout<<H0<<endl;
       for(i=0;i<Q;i++){
 	      fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(Ux0,Uy0,p0,rho0,i)+Fi(tau_phi0,Ux0,Uy0,gr_x,gr_y,Fx,Fy,i);
 	      g1new[ix][iy][i]=UmUtaug1*g1[ix][iy][i]+Utaug1*geq(Ux0,Uy0,c10,eta1_bar,mu_c10,i)+Gi(tau_g1,dt_c1ux0,dt_c1uy0,i);
@@ -377,13 +378,14 @@ void LB::Advection(void){
       }
 }
 void LB::Init(double Ux0,double Uy0){
-  double cl0=0.1,cg0=0.8188;
+  double cl10=0.1,cg10=0.8188;
+  double cl20=1.0-cl10,cg20=1.0-cg10;
   double phi0, c10, c20, rho0;
   double gr_x, gr_y, mu_c10, mu_c20, p0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
-      phi0 =0.5*tanh(2*(double)(iy-0.25*Ly)/W)-0.5*tanh(2*(double)(iy-0.75*Ly)/W);
-      c10 =(cg0-cl0)*phi0+cl0;  c20 =(cl0-cg0)*phi0+cg0;  rho0=rho(c10,c20);
+      phi0 =0.5*tanh(2*(double)(iy-0.4*Ly)/W)-0.5*tanh(2*(double)(iy-0.6*Ly)/W);
+      c10 =(cg10-cl10)*phi0+cl10;  c20 =(cg20-cl20)*phi0+cl20;  rho0=rho(c10,c20);
       gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
       mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
@@ -417,11 +419,14 @@ void LB::ImposeFields(void){
 }
 void LB::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); 
-  double phi0,c10,c20,rho0;
+  double phi0,c10,c20,rho0,gr_x,gr_y,Fx,Fy,Ux0,Uy0;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
       phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=c2(ix,iy,true); rho0=rho(c10,c20);
-      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<c10<<" "<<c20<<endl;
+      gr_x=drho_dx(ix,iy,true);  gr_y=drho_dy(ix,iy,true);
+      Fx=Fsx(ix,iy,true)+gx*rho0;  Fy=Fsy(ix,iy,true)+gy*rho0;
+      Ux0=Jx(ix,iy,true,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2/rho0;
+      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<" "<<Uy0<<endl;
     }
   MiArchivo.close();
 }
@@ -429,11 +434,11 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=100;
+  int t,tmax=450;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){
-    Zhang.Collision(0,0);
+    Zhang.Collision(t,0,0);
     //Zhang.ImposeFields();
     Zhang.Advection();
   }

@@ -26,15 +26,19 @@ private:
   double sigma=2.5e-3;             //surface tension
   double M_c=9.3e-2;
   //kappas
-  double k_phi;
-  double k_c1,k_c2;
+  double k_phi=1.5*sigma*W;
+  double k_c1=k_phi,k_c2=k_phi;
   double M_phi=M_c/(W*W);
   double beta_phi=8*k_phi/(W*W);
   double beta_c=0.1*beta_phi;
   //Relaxation times
-  double tau_g1=(M_c*U_Cs2/nu1_bar)+0.5;
-  double tau_g2=(M_c*U_Cs2/nu2_bar)+0.5;
-  double tau_phi=M_phi*U_Cs2+0.5;
+  double tau_g1=(M_c*U_Cs2/eta1_bar)+0.5;
+  double tau_g2=(M_c*U_Cs2/eta2_bar)+0.5;
+  double tau_h=(M_phi*k_phi*U_Cs2)+0.5;//B=0;
+  double Utaug1=1.0/tau_g1;  UmUtaug1=1.0-Utaug1;
+  double Utaug2=1.0/tau_g2;  UmUtaug2=1.0-Utaug2;
+  double Utauh=1.0/tau_h;  UmUtauh=1.0-Utauh;
+  //double tau_phi=M_phi*U_Cs2+0.5;
   //cache variable phiu for dt
   double old_c1ux[Lx][Ly];
   double old_c1uy[Lx][Ly];
@@ -52,17 +56,12 @@ public:
   double rho(int ix, int iy, bool UseNew);
   double eta(double c10,double c20);
   double tau_f(double eta0,double rho0);
-  double tau_f(double eta0,double rho0);
-  double mu_phi(int ix, int iy, bool UseNew);
-  //Gradient components
-  double dphi_dx(int ix, int iy, bool UseNew);
-  double dc1_dx(int ix, int iy, bool UseNew);
-  double dphi_dy(int ix, int iy, bool UseNew);
-  double dc2_dx(int ix, int iy, bool UseNew);
+  //Derivative components
+  double drho_dx(int ix, int iy, bool UseNew);
+  double drho_dy(int ix, int iy, bool UseNew);
   double Laplacian_phi(int ix, int iy, bool UseNew);
   double Laplacian_c1(int ix, int iy, bool UseNew);
   double Laplacian_c2(int ix, int iy, bool UseNew);
-  double norm_gr(double gr_x, double gr_y);
   //Free energy 
   double f0(double phi0, double c10, double c20); 
   double df0_dphi(double phi0);
@@ -73,18 +72,19 @@ public:
   double mu_c1(int ix, int iy, bool UseNew);
   double mu_c2(int ix, int iy, bool UseNew);
   //Forces
-  double Fsx_phi(double mu, double gr_x);
-  double Fsy_phi(double mu, double gr_y);
+  double Fsx(int ix, int iy, bool UseNew);
+  double Fsy(int ix, int iy, bool UseNew);
   double Jx(int ix,int iy,bool UseNew,double Fx);
   double Jy(int ix,int iy,bool UseNew,double Fy);
+  //Auxiliary fields
+  double H(int ix, int iy, bool UseNew);
   double Gamma(double Ux0, double Uy0, int i);
   double Fi(double tau,double Ux0,double Uy0,double gr_x,double gr_y,double Fx,double Fy,int i);
   double Gi(double tau,double dt_cjux,double dt_cjuy,int i);
-  double Hi(double tau,double dt_phiux,double dt_phiuy,double H,double dH_dt,int i);
+  double Hi(double dt_phiux,double dt_phiuy,double H,double dH_dt,int i);
   double p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew);
-  double si(double Ux0, double Uy0, int i);
   double feq(double Ux0,double Uy0,double p0,double rho0,int i);
-  double geq(double Ux0,double Uy0,double cj0,double nuj0,double muj0,int i);
+  double geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i);
   double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i);
   void Collision(double gx,double gy);
   void Advection(void);
@@ -128,59 +128,37 @@ double LB::c2(int ix,int iy,bool UseNew){
 double LB::rho(double c10,double c20){
   return rho1_bar*c10+rho2_bar*c20;
 }
+double eta(double c10,double c20){
+  return exp(c10*log(eta1_bar)+c20*log(eta2_bar));//Gij = 0 
+}
 double LB::tau_f(double eta0,double rho0){
   return eta0*U_Cs2/rho0 + 0.5;
 }
-double eta(double c10,double c20){
-  return exp(c10*log(eta1_bar)+c20*log(eta2_bar));  //Gij = 0 
-}
-double LB::dphi_dx(int ix, int iy, bool UseNew){
-  int i; double sum;
+double LB::drho_dx(int ix, int iy, bool UseNew){
+  int i; double sum_c1,sum_c2;
   int jx, jy;
   for(sum=0,i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
     if(iy==0||iy==Ly-1) jy=iy;
-    sum+=w[i]*V[0][i]*phi(jx,jy,UseNew);
+    sum_c1+=w[i]*V[0][i]*c1(jx,jy,UseNew);
+    sum_c2+=w[i]*V[0][i]*c2(jx,jy,UseNew);
   }
-  return sum*U_Cs2;
+  return U_Cs2*(rho1_bar*sum_c1+rho2_bar*sum_c2);
 }
-double LB::dc1_dx(int ix, int iy, bool UseNew){
-  int i; double sum;
+double LB::drho_dy(int ix, int iy, bool UseNew){
+  int i; double sum_c1,sum_c2;
   int jx, jy;
   for(sum=0,i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
     if(iy==0||iy==Ly-1) jy=iy;
-    sum+=w[i]*V[0][i]*c1(jx,jy,UseNew);
+    sum_c1+=w[i]*V[1][i]*c1(jx,jy,UseNew);
+    sum_c2+=w[i]*V[1][i]*c2(jx,jy,UseNew);
   }
-  return sum*U_Cs2;
-}
-double LB::dphi_dy(int ix, int iy, bool UseNew){
-  int i; double sum;
-  int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
-    jx=(Lx+ix+V[0][i])%Lx;
-    //if(ix==0||ix==Lx-1) jx=ix;
-    jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
-    sum+=w[i]*V[1][i]*phi(jx,jy,UseNew);
-  }
-  return sum*U_Cs2;
-}
-double LB::dc2_dx(int ix, int iy, bool UseNew){
-  int i; double sum;
-  int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
-    jx=(Lx+ix+V[0][i])%Lx;
-    //if(ix==0||ix==Lx-1) jx=ix;
-    jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
-    sum+=w[i]*V[0][i]*c2(jx,jy,UseNew);
-  }
-  return sum*U_Cs2;
+  return U_Cs2*(rho1_bar*sum_c1+rho2_bar*sum_c2);
 }
 double LB::Laplacian_phi(int ix, int iy, bool UseNew){
   int i; double sum;
@@ -218,9 +196,6 @@ double LB::Laplacian_c2(int ix, int iy, bool UseNew){
   }
   return sum*2*U_Cs2;
 }
-double LB::norm_gr(double gr_x, double gr_y){
-  return (gr_x == 0 && gr_y == 0) ? 1 : sqrt(gr_x*gr_x + gr_y*gr_y);
-}
 double LB::f0(double phi0, double c10, double c20)
 {
   double W_phi = phi0*phi0*(1.0 - phi0*phi0);
@@ -245,14 +220,8 @@ double LB::mu_c1(int ix, int iy, bool UseNew){
 double LB::mu_c2(int ix, int iy, bool UseNew){
   return -k_c2*Laplacian_c2(ix,iy,UseNew); 
 }
-double LB::nx(double gr_x, double norm){
-  return gr_x / norm;
-}
-double LB::ny(double gr_y, double norm){
-  return gr_y / norm;
-}
 double LB::Fsx(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
   int jx, jy;
   for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -261,12 +230,12 @@ double LB::Fsx(int ix, int iy, bool UseNew){
     if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
 }
-double LB::Fsy(double mu, double gr_y){
-  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
+double LB::Fsy(int ix, int iy, bool UseNew){
+  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
   int jx, jy;
   for(i=1;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -275,9 +244,9 @@ double LB::Fsy(double mu, double gr_y){
     if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
@@ -290,6 +259,11 @@ double LB::Jy(int ix,int iy,bool UseNew,double Fy){
   for(suma=0,i=0;i<Q;i++)
     if(UseNew) suma+=gnew[ix][iy][i]*V[1][i]; else suma+=g[ix][iy][i]*V[1][i];
   return suma+0.5*Cs2*Fy;
+}
+double LB::H(int ix,int iy,bool UseNew){
+  double mu_phi0 = mu_phi(ix,iy,UseNew);
+  double lapl_phi= Laplacian_phi(ix,iy,UseNew);
+  return -M_phi*(mu_phi0+k_phi*lapl_phi);
 }
 double LB::Gamma(double Ux0,double Uy0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
@@ -309,9 +283,9 @@ double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i)
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
   return U_Cs2*UmU2tau*w[i]*DtdotVi;
 }
-double LB::Hi(double tau,double dt_phiux,double dt_phiuy,double H,double dH_dt,int i){
+double LB::Hi(double dt_phiux,double dt_phiuy,double H,double dH_dt,int i){
   double DtdotVi=dt_phiux*V[0][i]+dt_phiuy*V[1][i];
-  double UmU2tau = 1.0 - 1.0/(2.0*tau);
+  double UmU2tau = 1.0 - 1.0/(2.0*tau_h);
   return UmU2tau*w[i]*(U_Cs2*DtdotVi+H+0.5*dH_dt);
 }
 double LB::p(double Ux0,double Uy0,double gr_x,double gr_y,double rho0,int ix,int iy, bool UseNew){
@@ -326,11 +300,11 @@ double LB::feq(double Ux0,double Uy0,double p0,double rho0,int i){
   double Gu_G0=Gamma(Ux0,Uy0,i)-Gamma(0,0,i);
   return w[i]*p0+rho0*Gu_G0*Cs2;
 }
-double LB::geq(double Ux0,double Uy0,double cj0,double nuj0,double muj0,int i){
+double LB::geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i];
   double rho_siu=cj0*w[i]*U_Cs2*UdotVi;
-  if(i>0) return w[i]*muj0*nuj0+rho_siu;
-  else return nuj0*muj0*(w[i]-1.0)+cj0;
+  if(i>0) return w[i]*muj0*etaj0+rho_siu;
+  else return etaj0*muj0*(w[i]-1.0)+cj0;
 }
 double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
@@ -338,31 +312,43 @@ double heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
 }
 void LB::Collision(double gx,double gy){
   int ix,iy,i; 
-  double phi0,rho0,p0,lmd0,mu0; 
-  double tau0,Utau,UmUtau,Utau_phi,UmUtau_phi;
-  double gr_x,gr_y,norm0,nx0,ny0;
-  double Fx,Fy;
-  double Ux0,Uy0;
+  double phi0,c10,c20,rho0,p0,eta0;
+  double tau_phi0,Utau,UmUtau;
+  double gr_x,gr_y,mu_c10,mu_c20;
+  double Fx,Fy,Ux0,Uy0;
   double phiux0,phiuy0,dt_phiux0,dt_phiuy0;
+  double c1ux0,c1uy0,dt_c1ux0,dt_c1uy0;
+  double c2ux0,c2uy0,dt_c2ux0,dt_c2uy0;
+  double H0,dH_dt;
   //Para cada celda
   for(ix=0;ix<Lx;ix++)
     for(iy=0;iy<Ly;iy++){
       //Calcular las cantidades macroscopicas
-      phi0=phi(ix,iy,false);  gr_x=dphi_dx(ix,iy,false);  gr_y=dphi_dy(ix,iy,false);
-      norm0=norm_gr(gr_x,gr_y); nx0=nx(gr_x,norm0); ny0=ny(gr_y,norm0);
-      mu0=mu_phi(ix,iy,false);  rho0=rho(phi0); lmd0=lambda(phi0);  
-      tau0=tau(phi0); Utau=1.0/tau0;  UmUtau=1.0-Utau;
-      Utau_phi=1.0/tau_phi;  UmUtau_phi=1.0-Utau_phi;
-      Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
-      Ux0=Jx(ix,iy,false,Fx)/rho0;  Uy0=Jy(ix,iy,false,Fy)/rho0;
+      phi0=phi(ix,iy,false);  c10=c1(ix,iy,false);  c20=c2(ix,iy,false);  rho0=rho(ix,iy,false);
+      eta0=eta(c10,c20);  tau_phi0=tau_phi(eta0,rho0);  Utau=1.0/tau_phi0;  UmUtau=1.0-Utau;
+      gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
+      mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
+      Fx=Fsx(ix,iy,false)+gx*rho0;  Fy=Fsy(ix,iy,false)+gy*rho0;
+      Ux0=Jx(ix,iy,false,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,false,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
+      //Computing the time derivatives
       phiux0=Ux0*phi0; dt_phiux0=phiux0 - old_phiux[ix][iy];
       phiuy0=Uy0*phi0; dt_phiuy0=phiuy0 - old_phiuy[ix][iy];
+      c1ux0=Ux0*c10; dt_c1ux0=c1ux0 - old_c1ux[ix][iy];
+      c1uy0=Uy0*c10; dt_c1uy0=c1uy0 - old_c1uy[ix][iy];
+      c2ux0=Ux0*c20; dt_c2ux0=c2ux0 - old_c2ux[ix][iy];
+      c2uy0=Uy0*c20; dt_c2uy0=c2uy0 - old_c2uy[ix][iy];
+      H0=H(ix,iy,false);  dH_dt=H0 - old_H[ix][iy];
       for(i=0;i<Q;i++){
-	      fnew[ix][iy][i]=UmUtau_phi*f[ix][iy][i]+Utau_phi*feq(phi0,Ux0,Uy0,i)+Fi(nx0,ny0,dt_phiux0,dt_phiuy0,lmd0,i,tau_phi);
-	      gnew[ix][iy][i]=UmUtau*g[ix][iy][i]+Utau*geq(rho0,p0,Ux0,Uy0,i)+Gi(Ux0,Uy0,Fx,Fy,gr_x,gr_y,i,tau0);
+	      fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(Ux0,Uy0,p0,rho0,i)+Fi(tau_phi0,Ux0,Uy0,gr_x,gr_y,Fx,Fy,i);
+	      g1new[ix][iy][i]=UmUtaug1*g1[ix][iy][i]+Utaug1*geq(Ux0,Uy0,c10,eta1_bar,mu_c10,i)+Gi(tau_g1,dt_c1ux0,dt_c1uy0,i);
+	      g2new[ix][iy][i]=UmUtaug2*g2[ix][iy][i]+Utaug2*geq(Ux0,Uy0,c20,eta2_bar,mu_c20,i)+Gi(tau_g2,dt_c2ux0,dt_c2uy0,i);
+	      hnew[ix][iy][i]=UmUtauh*h[ix][iy][i]+Utauh*heq(phi0,Ux0,Uy0,gr_x,gr_y,i)+Hi(dt_phiux0,dt_phiuy0,H0,dH_dt,i);
       }
       old_phiux[ix][iy]=phiux0; old_phiuy[ix][iy]=phiuy0;
+      old_c1ux[ix][iy]=c1ux0; old_c1uy[ix][iy]=c1uy0;
+      old_c2ux[ix][iy]=c2ux0; old_c2uy[ix][iy]=c2uy0;
+      old_H[ix][iy]=H0;
     }
 }
 void LB::Advection(void){
@@ -371,39 +357,32 @@ void LB::Advection(void){
     for(int iy=0;iy<Ly;iy++)
       for(int i=0;i<Q;i++){
 	      f[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=fnew[ix][iy][i];
-	      g[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=gnew[ix][iy][i];
-       //bounceback iy = 0
-      f[ix][0][1]=D*fnew[ix][0][3];g[ix][0][1]=D*gnew[ix][0][3];
-      f[ix][0][2]=D*fnew[ix][0][4];g[ix][0][2]=D*gnew[ix][0][4];
-      f[ix][0][3]=D*fnew[ix][0][1];g[ix][0][3]=D*gnew[ix][0][1];
-      f[ix][0][4]=D*fnew[ix][0][2];g[ix][0][4]=D*gnew[ix][0][2];
-      f[ix][0][5]=D*fnew[ix][0][7];g[ix][0][5]=D*gnew[ix][0][7];
-      f[ix][0][6]=D*fnew[ix][0][8];g[ix][0][6]=D*gnew[ix][0][8];
-      f[ix][0][7]=D*fnew[ix][0][5];g[ix][0][7]=D*gnew[ix][0][5];
-      f[ix][0][8]=D*fnew[ix][0][6];g[ix][0][8]=D*gnew[ix][0][6];
-      //bounceback iy = Ly-1
-      f[ix][Ly-1][1]=D*fnew[ix][Ly-1][3];g[ix][Ly-1][1]=D*gnew[ix][Ly-1][3];
-      f[ix][Ly-1][2]=D*fnew[ix][Ly-1][4];g[ix][Ly-1][2]=D*gnew[ix][Ly-1][4];
-      f[ix][Ly-1][3]=D*fnew[ix][Ly-1][1];g[ix][Ly-1][3]=D*gnew[ix][Ly-1][1];
-      f[ix][Ly-1][4]=D*fnew[ix][Ly-1][2];g[ix][Ly-1][4]=D*gnew[ix][Ly-1][2];
-      f[ix][Ly-1][5]=D*fnew[ix][Ly-1][7];g[ix][Ly-1][5]=D*gnew[ix][Ly-1][7];
-      f[ix][Ly-1][6]=D*fnew[ix][Ly-1][8];g[ix][Ly-1][6]=D*gnew[ix][Ly-1][8];
-      f[ix][Ly-1][7]=D*fnew[ix][Ly-1][5];g[ix][Ly-1][7]=D*gnew[ix][Ly-1][5];
-      f[ix][Ly-1][8]=D*fnew[ix][Ly-1][6];g[ix][Ly-1][8]=D*gnew[ix][Ly-1][6];
+	      g1[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=g1new[ix][iy][i];
+	      g2[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=g2new[ix][iy][i];
+	      h[(ix+V[0][i]+Lx)%Lx][(iy+V[1][i]+Ly)%Ly][i]=hnew[ix][iy][i];
       }
 }
 void LB::Init(double Ux0,double Uy0){
-  double phi0, rho0, gr_x, gr_y, p0;
+  double cl0=0.1,cg0=0.8188;
+  double phi0, c10, c20, rho0;
+  double gr_x, gr_y, mu_c10, mu_c20, p0;
   for(int ix=0;ix<Lx;ix++)
     for(int iy=0;iy<Ly;iy++){
-      phi0 =0.5-0.5*tanh(2*(double)(iy-Ly/2)/W);
-      rho0=rho(phi0);
-      gr_x=dphi_dx(ix,iy,false);  gr_y=dphi_dy(ix,iy,false);
+      phi0 =0.5*tanh(2*(double)(iy-0.4*Ly)/W)-0.5*tanh(2*(double)(iy-0.6*Ly)/W);
+      c10 =(cg0-cl0)*phi0+cl0;  c20 =(cl0-cg0)*phi0+cg0;  rho0=c10*rho1_bar+c20*rho2_bar;
+      gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
+      mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
+      //Initialize the time derivatives!
       old_phiux[ix][iy] = phi0*Ux0; old_phiuy[ix][iy] = phi0*Uy0;
+      old_c1ux[ix][iy]=c10*Ux0; old_c1uy[ix][iy]=c10*Uy0;
+      old_c2ux[ix][iy]=c20*Ux0; old_c2uy[ix][iy]=c20*Uy0;
+      old_H[ix][iy]=H(ix,iy,false);
       for(int i=0;i<Q;i++){
-	      f[ix][iy][i]=feq(phi0,Ux0,Uy0,i);
-	      g[ix][iy][i]=geq(rho0,p0,Ux0,Uy0,i);
+	      f[ix][iy][i]=feq(Ux0,Uy0,p0,rho0,i);
+	      g1[ix][iy][i]=geq(Ux0,Uy0,c10,eta1_bar,mu_c10,i);
+	      g2[ix][iy][i]=geq(Ux0,Uy0,c20,eta2_bar,mu_c20,i);
+        h[ix][iy][i]=heq(phi0,Ux0,Uy0,gr_x,gr_y,i);
       }
   }
 }
@@ -421,43 +400,28 @@ void LB::ImposeFields(void){
 }
 void LB::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); 
-  double phi0,rho0,mu0,tau0,lmd0,Ux0,Uy0,p0; double Fx,Fy,gr_x,gr_y,gr_xloc,gr_yloc;
-  double dt_phiux,dt_phiuy;
+  double phi0,c10,c20,rho0;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
-      phi0=phi(ix,iy,true);
-      gr_x=dphi_dx(ix,iy,true);  gr_y=dphi_dy(ix,iy,true);
-      mu0=mu_phi(ix,iy,true);  rho0=rho(phi0);tau0=tau(phi0);lmd0=lambda(phi0);
-      Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
-      Ux0=Jx(ix,iy,true,Fx)/rho0;  Uy0=Jy(ix,iy,true,Fy)/rho0;
-      dt_phiux=phi0*Ux0 - old_phiux[ix][iy];
-      dt_phiuy=phi0*Uy0 - old_phiuy[ix][iy];
-      p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
-      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<endl;
+      phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=c2(ix,iy,true); rho0=rho(ix,iy,true);
+      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<c10<<" "<<c20<<endl;
     }
   MiArchivo.close();
 }
 
 
 int main(void){
-  double W=5;
-  double rho_l=100, rho_g=1;  //rho_l liquid density; rho_g gas density;
-  double sigma=1.0e-3;             //surface tension
-  double nu_l =0.1, nu_g =0.01;
-  double M=0.1;
-  LB Liang(W,rho_l,rho_g,nu_l,nu_g,M,sigma);
-  int t,tmax=100000;
-  double Uc=1e-4,g=4*Uc*(rho_l*nu_l+rho_g*nu_g)/(Ly*Ly);
-  cout << g << endl; 
-  Liang.Init(g,0);
+  LB Liang();
+  int t,tmax=1;
+  Liang.Init(0,0);
   
   for(t=0;t<tmax;t++){
-    Liang.Collision(g,0);
+    Liang.Collision(0,0);
     //Liang.ImposeFields();
     Liang.Advection();
   }
   
-  Liang.Print("Liang.dat",g,0);
+  Liang.Print("Zhang.dat",g,0);
 
   return 0;
 }

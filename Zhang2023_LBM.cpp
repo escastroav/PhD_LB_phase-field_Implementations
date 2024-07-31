@@ -56,7 +56,7 @@ public:
   double c1(int ix,int iy,bool UseNew);
   double c2(int ix,int iy,bool UseNew);
   double rho(double c10,double c20);
-  double eta(double phi0);
+  double eta(double c10,double c20);
   double tau_phi(double eta0,double rho0);
   //Derivative components
   double drho_dx(int ix, int iy, bool UseNew);
@@ -66,11 +66,15 @@ public:
   double Laplacian_c2(int ix, int iy, bool UseNew);
   //Free energy 
   double f0(double phi0, double c10, double c20); 
-  double fl(void);
-  double fg(void);
-  double df0_dphi(double phi0);
-  double df0_dc1(double phi0, double c10, double c20); 
-  double df0_dc2(double phi0, double c10, double c20); 
+  double fl(double c1l,double c2l);
+  double fg(double c1g,double c2g);
+  double dfl_dcl(double c1l,double c2l);
+  double dfg_dcg(double c1g,double c2g);
+  double dfl_dc(double c1l,double c2l,double c1g,double c2g);
+  double dfg_dc(double c1l,double c2l,double c1g,double c2g);
+  double df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g);
+  double df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g);
+  double df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g);
   //Chemical potentials
   double mu_phi(int ix, int iy, bool UseNew);
   double mu_c1(int ix, int iy, bool UseNew);
@@ -137,10 +141,8 @@ double LB::c2(int ix,int iy,bool UseNew){
 double LB::rho(double c10,double c20){
   return rho1_bar*c10+rho2_bar*c20;
 }
-double LB::eta(double phi0){
-  double eta_l = exp(cl1*log(eta1_bar)+cl2*log(eta2_bar));//Gij = 0 
-  double eta_g = exp(cg1*log(eta1_bar)+cg2*log(eta2_bar));//Gij = 0 
-  return phi0*(eta_g-eta_l)+eta_l;
+double LB::eta(double c10,double c20){
+  return exp(c10*log(eta1_bar)+c20*log(eta2_bar));//Gij = 0 
 }
 double LB::tau_phi(double eta0,double rho0){
   return eta0*U_Cs2/rho0 + 0.5;
@@ -149,7 +151,7 @@ double LB::tau_phi(double eta0,double rho0){
 double LB::drho_dx(int ix, int iy, bool UseNew){
   int i; double sum_c1=0,sum_c2=0;
   int jx, jy;
-  for(i=1;i<Q;i++){
+  for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
@@ -162,7 +164,7 @@ double LB::drho_dx(int ix, int iy, bool UseNew){
 double LB::drho_dy(int ix, int iy, bool UseNew){
   int i; double sum_c1=0,sum_c2=0;
   int jx, jy;
-  for(i=1;i<Q;i++){
+  for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
@@ -175,7 +177,7 @@ double LB::drho_dy(int ix, int iy, bool UseNew){
 double LB::Laplacian_phi(int ix, int iy, bool UseNew){
   int i; double sum;
   int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
+  for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
@@ -187,7 +189,7 @@ double LB::Laplacian_phi(int ix, int iy, bool UseNew){
 double LB::Laplacian_c1(int ix, int iy, bool UseNew){
   int i; double sum;
   int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
+  for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
@@ -199,7 +201,7 @@ double LB::Laplacian_c1(int ix, int iy, bool UseNew){
 double LB::Laplacian_c2(int ix, int iy, bool UseNew){
   int i; double sum;
   int jx, jy;
-  for(sum=0,i=1;i<Q;i++){
+  for(sum=0,i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
@@ -215,35 +217,69 @@ double LB::f0(double phi0, double c10, double c20)
   double omega_phi = sigma/W;
   return omega_phi*W_phi;
 } 
-double LB::fl(void){
+double LB::fl(double c1l,double c2l){
   double lmd = -7.0;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
-  double term1=cl1*log(cl1)+cl2*log(cl2);
+  double term1=c1l*log(c1l)+c2l*log(c2l);
   double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
-  double term2=cl1*log(cl1+A_12*cl2)+cl2*log(cl1*A_21+cl2);
-  return term1-term2;
+  double term2=c1l*log(c1l+A_12*c2l)+c1l*log(c1l*A_21+c2l);
+  return Cs2*(term1-term2);
 }
-double LB::fg(void){
+double LB::fg(double c1g,double c2g){
   double lmd = -7.0;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
-  double term1=cg1*log(cg1)+cg2*log(cg2);
+  double term1=c1g*log(c1g)+c2g*log(c2g);
   double A_12 =v2v1*exp(-lmd*U_Cs2), A_21=v1v2*exp(lmd*U_Cs2);
-  double term2=cg1*log(cg1+A_12*cg2)+cg2*log(cg1*A_21+cg2);
-  return term1-term2;
+  double term2=c1g*log(c1g+A_12*c2g)+c2g*log(c1g*A_21+c2g);
+  return Cs2*(term1-term2);
 }
-double LB::df0_dphi(double phi0)
+double LB::dfa_dc1(double c1a,double c2a){
+  double lmd = -7.0;
+  double v1v2= rho2_bar/rho1_bar;
+  double v2v1= rho1_bar/rho2_bar;
+  double term1=log(c1a)+1;
+  double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
+  double term2=log(c1a+A_12*c2a);
+  double term3=c1a/(c1a+A_12*c2a);
+  double term4=c2a*A_21/(c1a*A_21+c2l);
+  return Cs2*(term1-term2-term3-term4);
+}
+double LB::dfa_dc2(double c1a,double c2a){
+  double lmd = -7.0;
+  double v1v2= rho2_bar/rho1_bar;
+  double v2v1= rho1_bar/rho2_bar;
+  double term1=log(c2a)+1;
+  double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
+  double term2=log(c1a*A_21+c2a);
+  double term3=c2a/(c1a*A_21+c2a);
+  double term4=c1a*A_12/(c1a+A_12*c2a);
+  return Cs2*(term1-term2-term3-term4);
+}
+double LB::df0_dphi(double phi0v,double c1l,double c2l,double c1g,double c2g)
 {
   double dW_dphi = 2.0*phi0*(1.0 - 2.0*phi0*phi0);
   double dg_dphi = 6.0*phi0*(1.0 - phi0*phi0);
-  double fg_fl = fg()-fl();
+  double fg_fl = fg(c1l,c2l)-fl(c1g,c2g);
   double omega_phi = sigma/W;
   double omega_mix = sigma/W;
   return omega_phi*dW_dphi+omega_mix*fg_fl*dg_dphi;
 } 
-double LB::df0_dc1(double phi0, double c10, double c20){return 0.0;}  //Future implementation 
-double LB::df0_dc2(double phi0, double c10, double c20){return 0.0;}  //Future implementation
+double LB::df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g){
+  double g=phi0*phi0*(3.0 - 2.0*phi0);
+  double dfl = dfa_dc1(c1l,c2l);
+  double dfg = dfa_dc1(c1g,c2g);
+  double omega_mix = sigma/W;
+  return omega_mix*(dfl*(1.0-g)-dfg*g);
+}
+double LB::df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g){
+  double g=phi0*phi0*(3.0 - 2.0*phi0);
+  double dfl = dfa_dc2(c1l,c2l);
+  double dfg = dfa_dc2(c1g,c2g);
+  double omega_mix = sigma/W;
+  return omega_mix*(dfl*(1.0-g)-dfg*g);
+}
 //Chemical potentials
 double LB::mu_phi(int ix, int iy, bool UseNew){
   double phi0=phi(ix,iy,UseNew);
@@ -257,32 +293,32 @@ double LB::mu_c2(int ix, int iy, bool UseNew){
 }
 //Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
   int jx, jy;
-  for(i=1;i<Q;i++){
+  for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    //if(iy==0||iy==Ly-1) jy=iy;
+    if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Fsy(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
   int jx, jy;
-  for(i=1;i<Q;i++){
+  for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    //if(iy==0||iy==Ly-1) jy=iy;
+    if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
@@ -366,11 +402,11 @@ void LB::Collision(int t,double gx,double gy){
     for(iy=0;iy<Ly;iy++){
       //Calcular las cantidades macroscopicas
       phi0=phi(ix,iy,false);  c10=c1(ix,iy,false);  c20=c2(ix,iy,false);  rho0=rho(c10,c20);
-      eta0=eta(phi0);  tau_phi0=tau_phi(eta0,rho0);  Utau=1.0/tau_phi0;  UmUtau=1.0-Utau;
+      eta0=eta(c10,c20);  tau_phi0=tau_phi(eta0,rho0);  Utau=1.0/tau_phi0;  UmUtau=1.0-Utau;
       gr_x=drho_dx(ix,iy,false);  gr_y=drho_dy(ix,iy,false);
       mu_c10=mu_c1(ix,iy,false);  mu_c20=mu_c2(ix,iy,false);
       Fx=Fsx(ix,iy,false)+gx*rho0;  Fy=Fsy(ix,iy,false)+gy*rho0;
-      Ux0=Jx(ix,iy,false,Fx)*U_Cs2;  Uy0=Jy(ix,iy,false,Fy)*U_Cs2;
+      Ux0=Jx(ix,iy,false,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,false,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
       //Computing the time derivatives
       phiux0=Ux0*phi0; dt_phiux0=phiux0 - old_phiux[ix][iy];
@@ -449,7 +485,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=c2(ix,iy,true); rho0=rho(c10,c20);
       gr_x=drho_dx(ix,iy,true);  gr_y=drho_dy(ix,iy,true);
       Fx=Fsx(ix,iy,true)+gx*rho0;  Fy=Fsy(ix,iy,true)+gy*rho0;
-      Ux0=Jx(ix,iy,true,Fx)*U_Cs2;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2;
+      Ux0=Jx(ix,iy,true,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,true);
       MiArchivo<<iy<<"\t"<<phi0<<"\t"<<rho0<<"\t"<<c10<<"\t"<<c20<<endl;
     }
@@ -459,7 +495,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=2000;
+  int t,tmax=3000;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){

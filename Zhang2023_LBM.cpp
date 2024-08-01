@@ -43,6 +43,7 @@ private:
   //omega for f0 (from ref [] w_phi = sigma/W but no clue about w_mix!)
   double omega_phi = sigma/W;
   double omega_mix = sigma/W;
+  double lmd_21_lmd_11 = -7.0;
   //cache variable phiu for dt
   double old_c1ux[Lx][Ly];
   double old_c1uy[Lx][Ly];
@@ -220,44 +221,44 @@ double LB::f0(double phi0,double c1l,double c2l,double c1g,double c2g)
   return omega_phi*W_phi+omega_mix*(fl(c1l,c2l)*(1-g)+fg(c1g,c2g)*g);
 } 
 double LB::fl(double c1l,double c2l){
-  double lmd = -7.0;
+  double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=c1l*log(c1l)+c2l*log(c2l);
-  double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
+  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
   double term2=c1l*log(c1l+A_12*c2l)+c1l*log(c1l*A_21+c2l);
-  return Cs2*(term1-term2);
+  return term1-term2;
 }
 double LB::fg(double c1g,double c2g){
-  double lmd = -7.0;
+  double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=c1g*log(c1g)+c2g*log(c2g);
-  double A_12 =v2v1*exp(-lmd*U_Cs2), A_21=v1v2*exp(lmd*U_Cs2);
+  double A_12 =v2v1*exp(-lmd), A_21=v1v2*exp(lmd);
   double term2=c1g*log(c1g+A_12*c2g)+c2g*log(c1g*A_21+c2g);
-  return Cs2*(term1-term2);
+  return term1-term2;
 }
 double LB::dfa_dc1(double c1a,double c2a){
-  double lmd = -7.0;
+  double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=log(c1a)+1;
-  double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
+  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
   double term2=log(c1a+A_12*c2a);
   double term3=c1a/(c1a+A_12*c2a);
   double term4=c2a*A_21/(c1a*A_21+c2a);
-  return Cs2*(term1-term2-term3-term4);
+  return term1-term2-term3-term4;
 }
 double LB::dfa_dc2(double c1a,double c2a){
-  double lmd = -7.0;
+  double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=log(c2a)+1;
-  double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
+  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
   double term2=log(c1a*A_21+c2a);
   double term3=c2a/(c1a*A_21+c2a);
   double term4=c1a*A_12/(c1a+A_12*c2a);
-  return Cs2*(term1-term2-term3-term4);
+  return term1-term2-term3-term4;
 }
 double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g)
 {
@@ -305,32 +306,32 @@ double LB::mu_c2(int ix,int iy,bool UseNew){
 }
 //Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
   int jx, jy;
   for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Fsy(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
   int jx, jy;
   for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
     //if(ix==0||ix==Lx-1) jx=ix;
     jy=(Ly+iy+V[1][i])%Ly;
-    if(iy==0||iy==Ly-1) jy=iy;
+    //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
-    sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
+    sum_c1+=w[i]*V[1][i]*mu_c1(jx,jy,UseNew);
+    //sum_c2+=w[i]*V[1][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
 }
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
@@ -362,7 +363,7 @@ double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double F
   double VUdotFG=VU_x*Fx+VU_y*Fy;
   double VUdotGr=VU_x*gr_x + VU_y*gr_y;
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
-  return UmU2tau*(VUdotFG*Gu+Cs2*VUdotGr*Gu_G0);
+  return UmU2tau*w[i]*(VUdotFG*Gu+Cs2*VUdotGr*Gu_G0);
 }
 double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i){
   double DtdotVi=dt_cjux*V[0][i]+dt_cjuy*V[1][i];
@@ -507,7 +508,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=3000;
+  int t,tmax=500;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){

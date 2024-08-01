@@ -40,7 +40,9 @@ private:
   double Utaug1=1.0/tau_g1,  UmUtaug1=1.0-Utaug1;
   double Utaug2=1.0/tau_g2,  UmUtaug2=1.0-Utaug2;
   double Utauh=1.0/tau_h,  UmUtauh=1.0-Utauh;
-  //double tau_phi=M_phi*U_Cs2+0.5;
+  //omega for f0 (from ref [] w_phi = sigma/W but no clue about w_mix!)
+  double omega_phi = sigma/W;
+  double omega_mix = sigma/W;
   //cache variable phiu for dt
   double old_c1ux[Lx][Ly];
   double old_c1uy[Lx][Ly];
@@ -65,13 +67,13 @@ public:
   double Laplacian_c1(int ix, int iy, bool UseNew);
   double Laplacian_c2(int ix, int iy, bool UseNew);
   //Free energy 
-  double f0(double phi0, double c10, double c20); 
+  double f0(double phi0,double c1l,double c2l,double c1g,double c2g); 
   double fl(double c1l,double c2l);
   double fg(double c1g,double c2g);
   double dfl_dcl(double c1l,double c2l);
   double dfg_dcg(double c1g,double c2g);
-  double dfl_dc(double c1l,double c2l,double c1g,double c2g);
-  double dfg_dc(double c1l,double c2l,double c1g,double c2g);
+  double dfa_dc1(double c1l,double c2l);
+  double dfa_dc2(double c1g,double c2g);
   double df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g);
   double df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g);
   double df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g);
@@ -211,11 +213,11 @@ double LB::Laplacian_c2(int ix, int iy, bool UseNew){
   return sum*2*U_Cs2;
 }
 //Free Energy
-double LB::f0(double phi0, double c10, double c20)
+double LB::f0(double phi0,double c1l,double c2l,double c1g,double c2g)
 {
   double W_phi = phi0*phi0*(1.0 - phi0*phi0);
-  double omega_phi = sigma/W;
-  return omega_phi*W_phi;
+  double g=phi0*phi0*(3.0 - 2.0*phi0);
+  return omega_phi*W_phi+omega_mix*(fl(c1l,c2l)*(1-g)+fg(c1g,c2g)*g);
 } 
 double LB::fl(double c1l,double c2l){
   double lmd = -7.0;
@@ -243,7 +245,7 @@ double LB::dfa_dc1(double c1a,double c2a){
   double A_12 =v2v1*exp(lmd*U_Cs2), A_21=v1v2*exp(-lmd*U_Cs2);
   double term2=log(c1a+A_12*c2a);
   double term3=c1a/(c1a+A_12*c2a);
-  double term4=c2a*A_21/(c1a*A_21+c2l);
+  double term4=c2a*A_21/(c1a*A_21+c2a);
   return Cs2*(term1-term2-term3-term4);
 }
 double LB::dfa_dc2(double c1a,double c2a){
@@ -257,39 +259,49 @@ double LB::dfa_dc2(double c1a,double c2a){
   double term4=c1a*A_12/(c1a+A_12*c2a);
   return Cs2*(term1-term2-term3-term4);
 }
-double LB::df0_dphi(double phi0v,double c1l,double c2l,double c1g,double c2g)
+double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g)
 {
   double dW_dphi = 2.0*phi0*(1.0 - 2.0*phi0*phi0);
   double dg_dphi = 6.0*phi0*(1.0 - phi0*phi0);
   double fg_fl = fg(c1l,c2l)-fl(c1g,c2g);
-  double omega_phi = sigma/W;
-  double omega_mix = sigma/W;
   return omega_phi*dW_dphi+omega_mix*fg_fl*dg_dphi;
 } 
 double LB::df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g){
   double g=phi0*phi0*(3.0 - 2.0*phi0);
   double dfl = dfa_dc1(c1l,c2l);
   double dfg = dfa_dc1(c1g,c2g);
-  double omega_mix = sigma/W;
   return omega_mix*(dfl*(1.0-g)-dfg*g);
 }
 double LB::df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g){
   double g=phi0*phi0*(3.0 - 2.0*phi0);
   double dfl = dfa_dc2(c1l,c2l);
   double dfg = dfa_dc2(c1g,c2g);
-  double omega_mix = sigma/W;
   return omega_mix*(dfl*(1.0-g)-dfg*g);
 }
 //Chemical potentials
-double LB::mu_phi(int ix, int iy, bool UseNew){
+double LB::mu_phi(int ix,int iy,bool UseNew){
   double phi0=phi(ix,iy,UseNew);
-  return df0_dphi(phi0)-k_phi*Laplacian_phi(ix,iy,UseNew); 
+  double c1l=c1(ix,0,UseNew), c1g=c1(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  double c2l=c2(ix,0,UseNew), c2g=c2(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  c1l=(c1l==0)?cl1:c1l; c1g=(c1g==0)?cg1:c1g;
+  c2l=(c2l==0)?cl2:c2l; c2g=(c2g==0)?cg2:c2g;
+  return df0_dphi(phi0,c1l,c2l,c1g,c2g)-k_phi*Laplacian_phi(ix,iy,UseNew); 
 }
-double LB::mu_c1(int ix, int iy, bool UseNew){
-  return -k_c1*Laplacian_c1(ix,iy,UseNew); 
+double LB::mu_c1(int ix,int iy,bool UseNew){
+  double phi0=phi(ix,iy,UseNew);
+  double c1l=c1(ix,0,UseNew), c1g=c1(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  double c2l=c2(ix,0,UseNew), c2g=c2(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  c1l=(c1l==0)?cl1:c1l; c1g=(c1g==0)?cg1:c1g;
+  c2l=(c2l==0)?cl2:c2l; c2g=(c2g==0)?cg2:c2g;
+  return df0_dc1(phi0,c1l,c2l,c1g,c2g)-k_c1*Laplacian_c1(ix,iy,UseNew); 
 }
-double LB::mu_c2(int ix, int iy, bool UseNew){
-  return -k_c2*Laplacian_c2(ix,iy,UseNew); 
+double LB::mu_c2(int ix,int iy,bool UseNew){
+  double phi0=phi(ix,iy,UseNew);
+  double c1l=c1(ix,0,UseNew), c1g=c1(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  double c2l=c2(ix,0,UseNew), c2g=c2(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
+  c1l=(c1l==0)?cl1:c1l; c1g=(c1g==0)?cg1:c1g;
+  c2l=(c2l==0)?cl2:c2l; c2g=(c2g==0)?cg2:c2g;
+  return df0_dc2(phi0,c1l,c2l,c1g,c2g)-k_c2*Laplacian_c2(ix,iy,UseNew); 
 }
 //Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
@@ -416,7 +428,7 @@ void LB::Collision(int t,double gx,double gy){
       c2ux0=Ux0*c20; dt_c2ux0=c2ux0 - old_c2ux[ix][iy];
       c2uy0=Uy0*c20; dt_c2uy0=c2uy0 - old_c2uy[ix][iy];
       H0=H(ix,iy,false);  dH_dt=H0 - old_H[ix][iy];
-      if(t==49)cout<<gr_y<<endl;
+      //if(t==49)cout<<gr_y<<endl;
       for(i=0;i<Q;i++){
 	      fnew[ix][iy][i]=UmUtau*f[ix][iy][i]+Utau*feq(Ux0,Uy0,p0,rho0,i)+Fi(tau_phi0,Ux0,Uy0,gr_x,gr_y,Fx,Fy,i);
 	      g1new[ix][iy][i]=UmUtaug1*g1[ix][iy][i]+Utaug1*geq(Ux0,Uy0,c10,eta1_bar,mu_c10,i)+Gi(tau_g1,dt_c1ux0,dt_c1uy0,i);

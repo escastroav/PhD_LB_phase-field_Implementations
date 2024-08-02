@@ -21,7 +21,7 @@ private:
   //Average densities per component
   double rho1_bar=1,rho2_bar=1;
   double eta1_bar=6.7e-2,eta2_bar=6.7e-2;
-  double cl1=0.1,cg1=0.8188;
+  double cl1=0.181,cg1=0.819;
   double cl2=1.0-cl1,cg2=1.0-cg1;
   //Adjustable parameters
   double W=4;                 //interface thickness
@@ -41,8 +41,8 @@ private:
   double Utaug2=1.0/tau_g2,  UmUtaug2=1.0-Utaug2;
   double Utauh=1.0/tau_h,  UmUtauh=1.0-Utauh;
   //omega for f0 (from ref [] w_phi = sigma/W but no clue about w_mix!)
-  double omega_phi = sigma/W;
-  double omega_mix = sigma/W;
+  double omega_phi = beta_phi;
+  double omega_mix = beta_c;
   double lmd_21_lmd_11 = -7.0;
   //cache variable phiu for dt
   double old_c1ux[Lx][Ly];
@@ -82,6 +82,7 @@ public:
   double mu_phi(int ix, int iy, bool UseNew);
   double mu_c1(int ix, int iy, bool UseNew);
   double mu_c2(int ix, int iy, bool UseNew);
+  double mutilde_cj(double mu_cj,double p0);
   //Forces and vector fields
   double Fsx(int ix, int iy, bool UseNew);
   double Fsy(int ix, int iy, bool UseNew);
@@ -225,7 +226,7 @@ double LB::fl(double c1l,double c2l){
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=c1l*log(c1l)+c2l*log(c2l);
-  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
+  double A_12 =v2v1*exp(-lmd), A_21=v1v2*exp(lmd);
   double term2=c1l*log(c1l+A_12*c2l)+c1l*log(c1l*A_21+c2l);
   return term1-term2;
 }
@@ -234,7 +235,7 @@ double LB::fg(double c1g,double c2g){
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
   double term1=c1g*log(c1g)+c2g*log(c2g);
-  double A_12 =v2v1*exp(-lmd), A_21=v1v2*exp(lmd);
+  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
   double term2=c1g*log(c1g+A_12*c2g)+c2g*log(c1g*A_21+c2g);
   return term1-term2;
 }
@@ -260,8 +261,7 @@ double LB::dfa_dc2(double c1a,double c2a){
   double term4=c1a*A_12/(c1a+A_12*c2a);
   return term1-term2-term3-term4;
 }
-double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g)
-{
+double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g){
   double dW_dphi = 2.0*phi0*(1.0 - 2.0*phi0*phi0);
   double dg_dphi = 6.0*phi0*(1.0 - phi0*phi0);
   double fg_fl = fg(c1l,c2l)-fl(c1g,c2g);
@@ -286,6 +286,7 @@ double LB::mu_phi(int ix,int iy,bool UseNew){
   double c2l=c2(ix,0,UseNew), c2g=c2(ix,Ly/2,UseNew); //at y=0 should be always liquid and y=Ly/2 always gas.
   c1l=(c1l==0)?cl1:c1l; c1g=(c1g==0)?cg1:c1g;
   c2l=(c2l==0)?cl2:c2l; c2g=(c2g==0)?cg2:c2g;
+  //cout << c2g << endl;
   return df0_dphi(phi0,c1l,c2l,c1g,c2g)-k_phi*Laplacian_phi(ix,iy,UseNew); 
 }
 double LB::mu_c1(int ix,int iy,bool UseNew){
@@ -295,6 +296,10 @@ double LB::mu_c1(int ix,int iy,bool UseNew){
   c1l=(c1l==0)?cl1:c1l; c1g=(c1g==0)?cg1:c1g;
   c2l=(c2l==0)?cl2:c2l; c2g=(c2g==0)?cg2:c2g;
   return df0_dc1(phi0,c1l,c2l,c1g,c2g)-k_c1*Laplacian_c1(ix,iy,UseNew); 
+}
+double LB::mutilde_cj(double mu_cj,double p0){
+  double g_i = (rho2_bar - rho1_bar)/rho2_bar;
+  return mu_cj + g_i * p0;
 }
 double LB::mu_c2(int ix,int iy,bool UseNew){
   double phi0=phi(ix,iy,UseNew);
@@ -396,7 +401,7 @@ double LB::geq(double Ux0,double Uy0,double cj0,double etaj0,double muj0,int i){
   else return etaj0*muj0*(w[0]-1.0)+cj0;
 }
 double LB::heq(double phi0,double Ux0,double Uy0,double gr_x,double gr_y,int i){
-  double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
+  double UdotVi=Ux0*V[0][i]+Uy0*V[1][i];
   return phi0*w[i]*(1+U_Cs2*UdotVi);//B=0
 }
 //LB steps
@@ -500,7 +505,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       Fx=Fsx(ix,iy,true)+gx*rho0;  Fy=Fsy(ix,iy,true)+gy*rho0;
       Ux0=Jx(ix,iy,true,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,true);
-      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<rho0<<"\t"<<c10<<"\t"<<c20<<endl;
+      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<mu_phi(ix,iy,true)<<"\t"<<c10<<"\t"<<c20<<endl;
     }
   MiArchivo.close();
 }
@@ -508,7 +513,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=500;
+  int t,tmax=150;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){

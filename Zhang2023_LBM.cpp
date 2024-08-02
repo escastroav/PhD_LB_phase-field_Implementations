@@ -71,10 +71,10 @@ public:
   double f0(double phi0,double c1l,double c2l,double c1g,double c2g); 
   double fl(double c1l,double c2l);
   double fg(double c1g,double c2g);
-  double dfl_dcl(double c1l,double c2l);
-  double dfg_dcg(double c1g,double c2g);
-  double dfa_dc1(double c1l,double c2l);
-  double dfa_dc2(double c1g,double c2g);
+  double dfl_dc1(double c1l,double c2l);
+  double dfg_dc1(double c1g,double c2g);
+  double dfl_dc2(double c1l,double c2l);
+  double dfg_dc2(double c1g,double c2g);
   double df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g);
   double df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g);
   double df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g);
@@ -239,26 +239,48 @@ double LB::fg(double c1g,double c2g){
   double term2=c1g*log(c1g+A_12*c2g)+c2g*log(c1g*A_21+c2g);
   return term1-term2;
 }
-double LB::dfa_dc1(double c1a,double c2a){
+double LB::dfl_dc1(double c1l,double c2l){
   double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
-  double term1=log(c1a)+1;
-  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
-  double term2=log(c1a+A_12*c2a);
-  double term3=c1a/(c1a+A_12*c2a);
-  double term4=c2a*A_21/(c1a*A_21+c2a);
+  double term1=log(c1l)+1;
+  double A_12 =v2v1*exp(-lmd), A_21=v1v2*exp(lmd);
+  double term2=log(c1l+A_12*c2l);
+  double term3=c1l/(c1l+A_12*c2l);
+  double term4=c2l*A_21/(c1l*A_21+c2l);
   return term1-term2-term3-term4;
 }
-double LB::dfa_dc2(double c1a,double c2a){
+double LB::dfg_dc1(double c1g,double c2g){
   double lmd = lmd_21_lmd_11;
   double v1v2= rho2_bar/rho1_bar;
   double v2v1= rho1_bar/rho2_bar;
-  double term1=log(c2a)+1;
+  double term1=log(c1g)+1;
   double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
-  double term2=log(c1a*A_21+c2a);
-  double term3=c2a/(c1a*A_21+c2a);
-  double term4=c1a*A_12/(c1a+A_12*c2a);
+  double term2=log(c1g+A_12*c2g);
+  double term3=c1g/(c1g+A_12*c2g);
+  double term4=c2g*A_21/(c1g*A_21+c2g);
+  return term1-term2-term3-term4;
+}
+double LB::dfl_dc2(double c1l,double c2l){
+  double lmd = lmd_21_lmd_11;
+  double v1v2= rho2_bar/rho1_bar;
+  double v2v1= rho1_bar/rho2_bar;
+  double term1=log(c2l)+1;
+  double A_12 =v2v1*exp(-lmd), A_21=v1v2*exp(lmd);
+  double term2=log(c1l*A_21+c2l);
+  double term3=c2l/(c1l*A_21+c2l);
+  double term4=c1l*A_12/(c1l+A_12*c2l);
+  return term1-term2-term3-term4;
+}
+double LB::dfg_dc2(double c1g,double c2g){
+  double lmd = lmd_21_lmd_11;
+  double v1v2= rho2_bar/rho1_bar;
+  double v2v1= rho1_bar/rho2_bar;
+  double term1=log(c2g)+1;
+  double A_12 =v2v1*exp(lmd), A_21=v1v2*exp(-lmd);
+  double term2=log(c1g*A_21+c2g);
+  double term3=c2g/(c1g*A_21+c2g);
+  double term4=c1g*A_12/(c1g+A_12*c2g);
   return term1-term2-term3-term4;
 }
 double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g){
@@ -269,14 +291,14 @@ double LB::df0_dphi(double phi0,double c1l,double c2l,double c1g,double c2g){
 } 
 double LB::df0_dc1(double phi0,double c1l,double c2l,double c1g,double c2g){
   double g=phi0*phi0*(3.0 - 2.0*phi0);
-  double dfl = dfa_dc1(c1l,c2l);
-  double dfg = dfa_dc1(c1g,c2g);
+  double dfl = dfl_dc1(c1l,c2l);
+  double dfg = dfg_dc1(c1g,c2g);
   return omega_mix*(dfl*(1.0-g)-dfg*g);
 }
 double LB::df0_dc2(double phi0,double c1l,double c2l,double c1g,double c2g){
   double g=phi0*phi0*(3.0 - 2.0*phi0);
-  double dfl = dfa_dc2(c1l,c2l);
-  double dfg = dfa_dc2(c1g,c2g);
+  double dfl = dfl_dc2(c1l,c2l);
+  double dfg = dfg_dc2(c1g,c2g);
   return omega_mix*(dfl*(1.0-g)-dfg*g);
 }
 //Chemical potentials
@@ -505,7 +527,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       Fx=Fsx(ix,iy,true)+gx*rho0;  Fy=Fsy(ix,iy,true)+gy*rho0;
       Ux0=Jx(ix,iy,true,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,true);
-      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<mu_phi(ix,iy,true)<<"\t"<<c10<<"\t"<<c20<<endl;
+      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<eta(c10,c20)<<"\t"<<c10<<"\t"<<c20<<endl;
     }
   MiArchivo.close();
 }

@@ -20,8 +20,8 @@ private:
   //double g2[Lx][Ly][Q], g2new[Lx][Ly][Q]; // g[ix][iy][i] component concentration
   //Average densities per component
   double rho1_bar=1,rho2_bar=1;
-  double eta1_bar=9.7e-2,eta2_bar=9.7e-2;
-  double cl1=0.181,cg1=0.819;
+  double eta1_bar=1.7e-1,eta2_bar=1.7e-1;
+  double cl1=0.25,cg1=0.85;
   double cl2=1.0-cl1,cg2=1.0-cg1;
   //Adjustable parameters
   double W=4;                 //interface thickness
@@ -370,7 +370,7 @@ double LB::mu_c2(int ix,int iy,bool UseNew){
 }
 //Forces and vector fields
 double LB::Fsx(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0;
   int jx, jy;
   for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -379,12 +379,11 @@ double LB::Fsx(int ix, int iy, bool UseNew){
     //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[0][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[0][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[0][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);
 }
 double LB::Fsy(int ix, int iy, bool UseNew){
-  int i; double sum_phi=0,sum_c1=0;//,sum_c2=0;
+  int i; double sum_phi=0,sum_c1=0;
   int jx, jy;
   for(i=0;i<Q;i++){
     jx=(Lx+ix+V[0][i])%Lx;
@@ -393,9 +392,8 @@ double LB::Fsy(int ix, int iy, bool UseNew){
     //if(iy==0||iy==Ly-1) jy=iy;
     sum_phi+=w[i]*V[1][i]*mu_phi(jx,jy,UseNew);
     sum_c1+=w[i]*V[1][i]*mu_c1(jx,jy,UseNew);
-    //sum_c2+=w[i]*V[1][i]*mu_c2(jx,jy,UseNew);
   }
-  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);//+c2(ix,iy,UseNew)*sum_c2);
+  return -U_Cs2*(phi(ix,iy,UseNew)*sum_phi+c1(ix,iy,UseNew)*sum_c1);
 }
 double LB::Jx(int ix,int iy,bool UseNew,double Fx){
   int i; double suma;
@@ -427,7 +425,7 @@ double LB::Fi(double tau,double Ux0,double Uy0,double gr_x, double gr_y,double F
   double VUdotFG=VU_x*Fx+VU_y*Fy;
   double VUdotGr=VU_x*gr_x + VU_y*gr_y;
   double UmU2tau = 1.0 - 1.0/(2.0*tau);
-  return UmU2tau*w[i]*(VUdotFG*Gu+Cs2*VUdotGr*Gu_G0);
+  return w[i]*(UmU2tau*VUdotFG*Gu+Cs2*VUdotGr*Gu_G0);
 }
 double LB::Gi(double tau,double dt_cjux,double dt_cjuy,int i){
   double DtdotVi=dt_cjux*V[0][i]+dt_cjuy*V[1][i];
@@ -555,15 +553,21 @@ void LB::ImposeFields(void){
 }
 void LB::Print(const char * NombreArchivo,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); 
-  double phi0,c10,c20,rho0,gr_x,gr_y,p0,Fx,Fy,Ux0,Uy0;
+  double phi0,c10,c20,rho0,gr_x,gr_y,grphi_x,grphi_y,p0,Fx,Fy,Ux0,Uy0;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
       phi0=phi(ix,iy,true); c10=c1(ix,iy,true); c20=1.0-c10; rho0=rho(c10,c20);
       gr_x=drho_dx(ix,iy,true);  gr_y=drho_dy(ix,iy,true);
+      grphi_x=dphi_dx(ix,iy,true);  grphi_y=dphi_dy(ix,iy,true);
       Fx=Fsx(ix,iy,true)+gx*rho0;  Fy=Fsy(ix,iy,true)+gy*rho0;
       Ux0=Jx(ix,iy,true,Fx)*U_Cs2/rho0;  Uy0=Jy(ix,iy,true,Fy)*U_Cs2/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,true);
-      MiArchivo<<iy<<"\t"<<phi0<<"\t"<<c10<<"\t"<<Fy<<"\t"<<mu_phi(ix,iy,true)<<endl;
+      //MiArchivo<<iy<<"\t"<<fnew[ix][iy][0]-feq(Ux0,Uy0,p0,rho0,0)
+      //             <<"\t"<<g1new[ix][iy][0]-geq(Ux0,Uy0,c10,eta1_bar,mu_c1(ix,iy,true),0)
+      //             <<"\t"<<hnew[ix][iy][0]-heq(phi0,Ux0,Uy0,grphi_x,grphi_y,0)<<"\t"<<endl;
+      MiArchivo<<iy<<"\t"<<phi0
+                   <<"\t"<<c10
+                   <<"\t"<<Uy0<<endl;
     }
   MiArchivo.close();
 }
@@ -571,16 +575,15 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=5000;
+  int t,tmax=100;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){
     Zhang.Collision(t,0,0);
-    //Zhang.ImposeFields();
     Zhang.Advection();
   }
   
-  Zhang.Print("zhang.dat",0,0);
+  Zhang.Print("zhang0.dat",0,0);
 
   return 0;
 }

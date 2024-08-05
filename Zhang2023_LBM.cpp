@@ -567,7 +567,8 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       //             <<"\t"<<hnew[ix][iy][0]-heq(phi0,Ux0,Uy0,grphi_x,grphi_y,0)<<"\t"<<endl;
       MiArchivo<<iy<<"\t"<<phi0
                    <<"\t"<<c10
-                   <<"\t"<<Uy0<<endl;
+                   <<"\t"<<p0
+                   <<"\t"<<gr_y<<endl;
     }
   MiArchivo.close();
 }
@@ -575,7 +576,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=100;
+  int t,tmax=20000;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){
@@ -583,7 +584,7 @@ int main(void){
     Zhang.Advection();
   }
   
-  Zhang.Print("zhang0.dat",0,0);
+  Zhang.Print("zhang.dat",0,0);
 
   return 0;
 }

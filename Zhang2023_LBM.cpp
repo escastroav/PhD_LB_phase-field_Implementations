@@ -568,7 +568,9 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
       MiArchivo<<iy<<"\t"<<phi0
                    <<"\t"<<c10
                    <<"\t"<<p0
-                   <<"\t"<<gr_y<<endl;
+                   <<"\t"<<Uy0
+                   <<"\t"<<mu_phi(ix,iy,true)
+                   <<"\t"<<mu_c1(ix,iy,true)<<endl;
     }
   MiArchivo.close();
 }
@@ -576,7 +578,7 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   LB Zhang;
-  int t,tmax=20000;
+  int t,tmax=50000;
   Zhang.Init(0,0);
   
   for(t=0;t<tmax;t++){

@@ -4,7 +4,7 @@
 using namespace std;
 
 const int Lx=1;
-const int Ly=64;
+const int Ly=100;
 
 const int Q=9;
 
@@ -23,7 +23,7 @@ private:
   double sigma;           //surface tension
   double nu_l,nu_g;       //nu_l liquid viscosity; nu_g gas viscosity;
   double M;               //mobility
-  double tau_phi=M*U_Cs2+0.5;
+  double tau_phi;
   //Auxiliary parameters
   double mu_l,  mu_g;
   double tau_l;
@@ -65,7 +65,7 @@ public:
   void Advection(void);
   void Init(double Ux0,double Uy0);
   void ImposeFields(void);
-  void Print(const char * NombreArchivo,double gx,double gy);
+  void Print(const char * NombreArchivo,double mu_l,double mu_g,double gx,double gy);
 };
 LB::LB(double W0,double rho_l0,double rho_g0,double nu_l0,double nu_g0,double M0,double sigma0){
   //Setting parameteres up
@@ -74,6 +74,7 @@ LB::LB(double W0,double rho_l0,double rho_g0,double nu_l0,double nu_g0,double M0
   sigma=sigma0;                 //surface tension
   nu_l =nu_l0, nu_g =nu_g0;     //nu_l liquid viscosity; nu_g gas viscosity;
   M=M0;                         //Mobility
+  tau_phi=M*U_Cs2+0.5;
   //Auxiliary parameters
   mu_l =nu_l*rho_l, mu_g =nu_g*rho_g;
   tau_l = U_Cs2*nu_l + 0.5;
@@ -228,7 +229,7 @@ double LB::geq(double rho0,double p0,double Ux0,double Uy0,int i){
   double UdotVi=Ux0*V[0][i]+Uy0*V[1][i], U2=Ux0*Ux0+Uy0*Uy0;
   double rho_siu=rho0*w[i]*(U_Cs2*UdotVi+U_Cs2*U_Cs2*0.5*UdotVi*UdotVi-U_Cs2*0.5*U2);
   if(i>0) return p0*w[i]*U_Cs2+rho_siu;
-  else return p0*(w[i]-1.0)*U_Cs2+rho_siu;
+  else return p0*(w[0]-1.0)*U_Cs2+rho_siu;
 
 }
 void LB::Collision(double gx,double gy){
@@ -248,7 +249,7 @@ void LB::Collision(double gx,double gy){
       mu0=mu_phi(ix,iy,false);  rho0=rho(phi0); lmd0=lambda(phi0);  
       tau0=tau(phi0); Utau=1.0/tau0;  UmUtau=1.0-Utau;
       Utau_phi=1.0/tau_phi;  UmUtau_phi=1.0-Utau_phi;
-      Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
+      Fx=Fsx(mu0,gr_x)+gx;  Fy=Fsy(mu0,gr_y)+gy;
       Ux0=Jx(ix,iy,false,Fx)/rho0;  Uy0=Jy(ix,iy,false,Fy)/rho0;
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
       phiux0=Ux0*phi0; dt_phiux0=phiux0 - old_phiux[ix][iy];
@@ -314,23 +315,34 @@ void LB::ImposeFields(void){
       }
     }
 }
-void LB::Print(const char * NombreArchivo,double gx,double gy){
+void LB::Print(const char * NombreArchivo,double mu_l,double mu_g,double gx,double gy){
   ofstream MiArchivo(NombreArchivo); 
   double phi0,rho0,mu0,tau0,lmd0,Ux0,Uy0,p0; double Fx,Fy,gr_x,gr_y,gr_xloc,gr_yloc;
+  double U_l0 = gx*Ly*Ly/(8*mu_l);
+  double a = (mu_g-mu_l)/(mu_g+mu_l);
+  double b = 2/(mu_g+mu_l);
+  double U_g0 = gx*Ly*Ly/(8*mu_g);
   double dt_phiux,dt_phiuy;
+  double Ly0=(double)Ly-1.0;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
       phi0=phi(ix,iy,true);
       gr_x=dphi_dx(ix,iy,true);  gr_y=dphi_dy(ix,iy,true);
       mu0=mu_phi(ix,iy,true);  rho0=rho(phi0);tau0=tau(phi0);lmd0=lambda(phi0);
-      Fx=Fsx(mu0,gr_x)+gx*rho0;  Fy=Fsy(mu0,gr_y)+gy*rho0;
+      Fx=Fsx(mu0,gr_x)+gx;  Fy=Fsy(mu0,gr_y)+gy;
       Ux0=Jx(ix,iy,true,Fx)/rho0;  Uy0=Jy(ix,iy,true,Fy)/rho0;
       dt_phiux=phi0*Ux0 - old_phiux[ix][iy];
       dt_phiuy=phi0*Uy0 - old_phiuy[ix][iy];
       gr_xloc=dphi_dx_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
       gr_yloc=dphi_dy_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
-      MiArchivo<<iy<<" "<<phi0<<" "<<rho0<<" "<<Ux0<<" "<<gr_y<<" "<<gr_yloc<<endl;
+      MiArchivo<<iy<<" "
+              <<phi0<<" "
+              <<U_l0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_l*b)<<" "
+              <<U_g0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_g*b)<<" "
+              <<Ux0<<" "
+              <<Fx<<" "
+              <<tau0<<endl;
     }
   MiArchivo.close();
 }
@@ -338,13 +350,14 @@ void LB::Print(const char * NombreArchivo,double gx,double gy){
 
 int main(void){
   double W=5;
-  double rho_l=100, rho_g=1;  //rho_l liquid density; rho_g gas density;
-  double sigma=1.0e-3;             //surface tension
-  double nu_l =0.1, nu_g =0.01;
+  double sigma=1.0e-2;             //surface tension
+  double rho_l=1, rho_g=10;  //rho_l liquid density; rho_g gas density;
+  double nu_l =0.1, nu_g =0.1;
+  double mu_l =nu_l*rho_l, mu_g =nu_g*rho_g;
   double M=0.1;
   LB Liang(W,rho_l,rho_g,nu_l,nu_g,M,sigma);
-  int t,tmax=100000;
-  double Uc=1e-4,g=4*Uc*(rho_l*nu_l+rho_g*nu_g)/(Ly*Ly);
+  int t,tmax=1000000;
+  double Uc=1e-4,g=4*Uc*(mu_l+mu_g)/(Ly*Ly);
   cout << g << endl; 
   Liang.Init(g,0);
   
@@ -354,7 +367,7 @@ int main(void){
     Liang.Advection();
   }
   
-  Liang.Print("Liang.dat",g,0);
+  Liang.Print("Liang.dat",mu_l,mu_g,g,0);
 
   return 0;
 }

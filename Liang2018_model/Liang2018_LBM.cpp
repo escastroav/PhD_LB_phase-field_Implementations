@@ -324,6 +324,7 @@ void LB::Print(const char * NombreArchivo,double mu_l,double mu_g,double gx,doub
   double U_g0 = gx*Ly*Ly/(8*mu_g);
   double dt_phiux,dt_phiuy;
   double Ly0=(double)Ly-1.0;
+  double Ux_t;
   int ix=Lx/2;
     for(int iy=0;iy<Ly;iy++){
       phi0=phi(ix,iy,true);
@@ -335,14 +336,14 @@ void LB::Print(const char * NombreArchivo,double mu_l,double mu_g,double gx,doub
       dt_phiuy=phi0*Uy0 - old_phiuy[ix][iy];
       gr_xloc=dphi_dx_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
       gr_yloc=dphi_dy_local(phi0,Ux0,Uy0,lmd0,dt_phiux,dt_phiuy,ix,iy,true);  
+      Ux_t=(iy<Ly/2) ? U_l0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_l*b) : U_g0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_g*b);
       p0=p(Ux0,Uy0,gr_x,gr_y,rho0,ix,iy,false);
       MiArchivo<<iy<<" "
               <<phi0<<" "
-              <<U_l0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_l*b)<<" "
-              <<U_g0*(-(iy-Ly0/2)*(iy-Ly0/2)*4/(Ly0*Ly0)-(iy-Ly0/2)*2*a/Ly0+mu_g*b)<<" "
+              <<Ux_t<<" "
               <<Ux0<<" "
-              <<Fx<<" "
-              <<tau0<<endl;
+              <<Fy<<" "
+              <<Laplacian_phi(ix,iy,true)<<endl;
     }
   MiArchivo.close();
 }
@@ -350,13 +351,13 @@ void LB::Print(const char * NombreArchivo,double mu_l,double mu_g,double gx,doub
 
 int main(void){
   double W=5;
-  double sigma=1.0e-2;             //surface tension
+  double sigma=1.0e-3;             //surface tension
   double rho_l=1, rho_g=10;  //rho_l liquid density; rho_g gas density;
-  double nu_l =0.1, nu_g =0.1;
+  double nu_l=0.1, nu_g=0.1;
   double mu_l =nu_l*rho_l, mu_g =nu_g*rho_g;
   double M=0.1;
   LB Liang(W,rho_l,rho_g,nu_l,nu_g,M,sigma);
-  int t,tmax=1000000;
+  int t,tmax=100000;
   double Uc=1e-4,g=4*Uc*(mu_l+mu_g)/(Ly*Ly);
   cout << g << endl; 
   Liang.Init(g,0);
